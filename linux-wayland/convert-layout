@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TMP_IN="$(mktemp)"
+TMP_OUT="$(mktemp)"
+trap 'rm -f "$TMP_IN" "$TMP_OUT"' EXIT
+
+wl-paste -t text/plain > "$TMP_IN" 2>/dev/null || exit 0
+
+if ! python3 - "$TMP_IN" > "$TMP_OUT" <<'PY'
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
+
+en_to_ru = {
+    "`": "ё", "~": "Ё",
+
+    "q": "й", "w": "ц", "e": "у", "r": "к", "t": "е", "y": "н", "u": "г", "i": "ш", "o": "щ", "p": "з",
+    "[": "х", "]": "ъ",
+    "a": "ф", "s": "ы", "d": "в", "f": "а", "g": "п", "h": "р", "j": "о", "k": "л", "l": "д",
+    ";": "ж", "'": "э",
+    "z": "я", "x": "ч", "c": "с", "v": "м", "b": "и", "n": "т", "m": "ь",
+    ",": "б", ".": "ю", "/": ".",
+
+    "Q": "Й", "W": "Ц", "E": "У", "R": "К", "T": "Е", "Y": "Н", "U": "Г", "I": "Ш", "O": "Щ", "P": "З",
+    "{": "Х", "}": "Ъ",
+    "A": "Ф", "S": "Ы", "D": "В", "F": "А", "G": "П", "H": "Р", "J": "О", "K": "Л", "L": "Д",
+    ":": "Ж", '"': "Э",
+    "Z": "Я", "X": "Ч", "C": "С", "V": "М", "B": "И", "N": "Т", "M": "Ь",
+    "<": "Б", ">": "Ю", "?": ",",
+
+    "@": '"',
+    "#": "№",
+    "$": ";",
+    "^": ":",
+    "&": "?",
+}
+
+ru_to_en = {v: k for k, v in en_to_ru.items()}
+
+latin = sum("a" <= ch.lower() <= "z" for ch in text)
+cyrillic = sum(("а" <= ch.lower() <= "я") or ch in "ёЁ" for ch in text)
+
+# Если букв нет — ничего не делаем и не трогаем буфер.
+if latin == 0 and cyrillic == 0:
+    sys.exit(10)
+
+# Если латиницы больше — считаем, что набрано русское слово в EN-раскладке.
+# Если кириллицы больше — наоборот.
+# Если равенство — тоже ничего не делаем, чтобы случайно не ломать смешанный текст.
+if latin > cyrillic:
+    table = str.maketrans(en_to_ru)
+elif cyrillic > latin:
+    table = str.maketrans(ru_to_en)
+else:
+    sys.exit(10)
+
+sys.stdout.write(text.translate(table))
+PY
+then
+    code=$?
+    if [[ "$code" == "10" ]]; then
+        exit 0
+    fi
+    exit "$code"
+fi
+
+if [[ ! -s "$TMP_OUT" ]]; then
+    exit 0
+fi
+
+wl-copy < "$TMP_OUT" || {
+    notify-send "Ошибка конвертации" "Не удалось записать результат в буфер" 2>/dev/null || true
+    exit 1
+}
+
+notify-send "Раскладка текста" "Буфер обмена конвертирован" 2>/dev/null || true
