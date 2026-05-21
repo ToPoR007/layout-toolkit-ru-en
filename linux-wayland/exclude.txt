@@ -1,0 +1,15 @@
+USB
+AHK
+PowerShell
+GitHub
+CMD
+Bash
+Python
+JavaScript
+C:\
+D:\
+http
+https
+www
+.com
+.ru

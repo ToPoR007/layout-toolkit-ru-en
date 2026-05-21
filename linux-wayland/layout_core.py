@@ -6,6 +6,24 @@ from pathlib import Path
 
 EXIT_NO_CHANGES = 10
 
+DEFAULT_EXCLUDES = [
+    "USB",
+    "AHK",
+    "PowerShell",
+    "GitHub",
+    "CMD",
+    "Bash",
+    "Python",
+    "JavaScript",
+    "C:\\",
+    "D:\\",
+    "http",
+    "https",
+    "www",
+    ".com",
+    ".ru",
+]
+
 
 EN_TO_RU = {
     "`": "ё", "~": "Ё",
@@ -34,6 +52,41 @@ EN_TO_RU = {
 RU_TO_EN = {v: k for k, v in EN_TO_RU.items()}
 
 
+def get_exclude_path() -> Path:
+    return Path(__file__).resolve().with_name("exclude.txt")
+
+
+def ensure_exclude_file(path: Path) -> None:
+    if path.exists():
+        return
+
+    path.write_text(
+        "\n".join(DEFAULT_EXCLUDES) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_exclude_words() -> set[str]:
+    path = get_exclude_path()
+    ensure_exclude_file(path)
+
+    words: set[str] = set()
+
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        word = line.strip()
+
+        if not word:
+            continue
+
+        # Комментарии в exclude.txt можно писать через #
+        if word.startswith("#"):
+            continue
+
+        words.add(word.casefold())
+
+    return words
+
+
 def is_latin(ch: str) -> bool:
     return "a" <= ch.lower() <= "z"
 
@@ -42,9 +95,65 @@ def is_cyrillic(ch: str) -> bool:
     return ("а" <= ch.lower() <= "я") or ch in "ёЁ"
 
 
-def detect_majority(text: str):
-    latin = sum(is_latin(ch) for ch in text)
-    cyrillic = sum(is_cyrillic(ch) for ch in text)
+def split_tokens(text: str) -> list[str]:
+    return re.findall(
+        r"https?://[^\s]+|"
+        r"www\.[^\s]+|"
+        r"[A-Za-z]:\\[^\s]*|"
+        r"\.[A-Za-z0-9]+|"
+        r"[A-Za-zА-Яа-яЁё0-9_]+|"
+        r"\s+|"
+        r"[^\s]",
+        text,
+    )
+
+
+def is_excluded_token(token: str, exclude_words: set[str]) -> bool:
+    normalized = token.strip().casefold()
+
+    if not normalized:
+        return False
+
+    # Обычное точное совпадение: USB, GitHub, PowerShell и т.д.
+    if normalized in exclude_words:
+        return True
+
+    # Пути Windows: C:\Windows, D:\Games и т.д.
+    for item in exclude_words:
+        if item.endswith(":\\") and normalized.startswith(item):
+            return True
+
+    # URL: http://..., https://..., www....
+    if "http" in exclude_words and normalized.startswith("http://"):
+        return True
+
+    if "https" in exclude_words and normalized.startswith("https://"):
+        return True
+
+    if "www" in exclude_words and normalized.startswith("www."):
+        return True
+
+    # Доменные хвосты: github.com, site.ru и т.д.
+    for item in exclude_words:
+        if item.startswith(".") and normalized.endswith(item):
+            return True
+
+    return False
+
+
+def detect_majority(text: str, exclude_words: set[str]) -> str | None:
+    latin = 0
+    cyrillic = 0
+
+    for token in split_tokens(text):
+        if token.isspace():
+            continue
+
+        if is_excluded_token(token, exclude_words):
+            continue
+
+        latin += sum(is_latin(ch) for ch in token)
+        cyrillic += sum(is_cyrillic(ch) for ch in token)
 
     if latin == 0 and cyrillic == 0:
         return None
@@ -58,8 +167,8 @@ def detect_majority(text: str):
     return None
 
 
-def convert_full(text: str) -> str | None:
-    majority = detect_majority(text)
+def convert_full(text: str, exclude_words: set[str]) -> str | None:
+    majority = detect_majority(text, exclude_words)
 
     if majority == "latin":
         table = str.maketrans(EN_TO_RU)
@@ -68,11 +177,24 @@ def convert_full(text: str) -> str | None:
     else:
         return None
 
-    return text.translate(table)
+    out: list[str] = []
+
+    for token in split_tokens(text):
+        if is_excluded_token(token, exclude_words):
+            out.append(token)
+        else:
+            out.append(token.translate(table))
+
+    result = "".join(out)
+
+    if result == text:
+        return None
+
+    return result
 
 
-def convert_minority_tokens(text: str) -> str | None:
-    majority = detect_majority(text)
+def convert_minority_tokens(text: str, exclude_words: set[str]) -> str | None:
+    majority = detect_majority(text, exclude_words)
 
     if majority == "latin":
         table = str.maketrans(RU_TO_EN)
@@ -94,11 +216,18 @@ def convert_minority_tokens(text: str) -> str | None:
             out.append(part)
             continue
 
+        if is_excluded_token(part, exclude_words):
+            out.append(part)
+            continue
+
         has_minority = any(minority(ch) for ch in part)
         has_majority = any(majority_fn(ch) for ch in part)
 
+        # Конвертируем только токены меньшинства.
+        # Если в токене смешаны обе письменности — не трогаем.
         if has_minority and not has_majority:
-            out.append(part.translate(table))
+            converted = part.translate(table)
+            out.append(converted)
             changed = True
         else:
             out.append(part)
@@ -117,11 +246,12 @@ def main() -> int:
     mode = sys.argv[1]
     input_path = Path(sys.argv[2])
     text = input_path.read_text(encoding="utf-8", errors="ignore")
+    exclude_words = load_exclude_words()
 
     if mode == "full":
-        result = convert_full(text)
+        result = convert_full(text, exclude_words)
     elif mode == "majority":
-        result = convert_minority_tokens(text)
+        result = convert_minority_tokens(text, exclude_words)
     else:
         print(f"Unknown mode: {mode}", file=sys.stderr)
         return 2
