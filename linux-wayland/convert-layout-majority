@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CORE="$SCRIPT_DIR/layout_core.py"
+
 TMP_IN="$(mktemp)"
 TMP_OUT="$(mktemp)"
 trap 'rm -f "$TMP_IN" "$TMP_OUT"' EXIT
@@ -8,89 +11,7 @@ trap 'rm -f "$TMP_IN" "$TMP_OUT"' EXIT
 wl-paste -t text/plain > "$TMP_IN" 2>/dev/null || exit 0
 
 set +e
-python3 - "$TMP_IN" > "$TMP_OUT" <<'PY'
-import sys
-import re
-from pathlib import Path
-
-text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore")
-
-en_to_ru = {
-    "`": "ё", "~": "Ё",
-
-    "q": "й", "w": "ц", "e": "у", "r": "к", "t": "е", "y": "н", "u": "г", "i": "ш", "o": "щ", "p": "з",
-    "[": "х", "]": "ъ",
-    "a": "ф", "s": "ы", "d": "в", "f": "а", "g": "п", "h": "р", "j": "о", "k": "л", "l": "д",
-    ";": "ж", "'": "э",
-    "z": "я", "x": "ч", "c": "с", "v": "м", "b": "и", "n": "т", "m": "ь",
-    ",": "б", ".": "ю", "/": ".",
-
-    "Q": "Й", "W": "Ц", "E": "У", "R": "К", "T": "Е", "Y": "Н", "U": "Г", "I": "Ш", "O": "Щ", "P": "З",
-    "{": "Х", "}": "Ъ",
-    "A": "Ф", "S": "Ы", "D": "В", "F": "А", "G": "П", "H": "Р", "J": "О", "K": "Л", "L": "Д",
-    ":": "Ж", '"': "Э",
-    "Z": "Я", "X": "Ч", "C": "С", "V": "М", "B": "И", "N": "Т", "M": "Ь",
-    "<": "Б", ">": "Ю", "?": ",",
-
-    "@": '"',
-    "#": "№",
-    "$": ";",
-    "^": ":",
-    "&": "?",
-}
-
-ru_to_en = {v: k for k, v in en_to_ru.items()}
-
-def is_latin(ch: str) -> bool:
-    return "a" <= ch.lower() <= "z"
-
-def is_cyrillic(ch: str) -> bool:
-    return ("а" <= ch.lower() <= "я") or ch in "ёЁ"
-
-latin = sum(is_latin(ch) for ch in text)
-cyrillic = sum(is_cyrillic(ch) for ch in text)
-
-if latin == 0 and cyrillic == 0:
-    sys.exit(10)
-
-if latin > cyrillic:
-    # Английского больше: исправляем только русские токены в EN.
-    table = str.maketrans(ru_to_en)
-    minority = is_cyrillic
-    majority = is_latin
-elif cyrillic > latin:
-    # Русского больше: исправляем только английские токены в RU.
-    table = str.maketrans(en_to_ru)
-    minority = is_latin
-    majority = is_cyrillic
-else:
-    sys.exit(10)
-
-parts = re.findall(r"\s+|\S+", text)
-out = []
-changed = False
-
-for part in parts:
-    if part.isspace():
-        out.append(part)
-        continue
-
-    has_minority = any(minority(ch) for ch in part)
-    has_majority = any(majority(ch) for ch in part)
-
-    # Конвертируем только токены меньшинства.
-    # Если в токене смешаны обе письменности — не трогаем, чтобы не ломать USB-порт, Python-скрипт и т.п.
-    if has_minority and not has_majority:
-        out.append(part.translate(table))
-        changed = True
-    else:
-        out.append(part)
-
-if not changed:
-    sys.exit(10)
-
-sys.stdout.write("".join(out))
-PY
+python3 "$CORE" majority "$TMP_IN" > "$TMP_OUT"
 status=$?
 set -e
 
