@@ -31,8 +31,14 @@ SendMode "Input"
 global g_AppName := "Layout Toolkit"
 global g_ConfigDir := A_AppData "\LayoutToolkit"
 global g_ConfigPath := g_ConfigDir "\settings.ini"
+global g_ExcludePath := A_ScriptDir "\exclude.txt"
+global g_ExcludeWords := Map()
+global g_ShowTrayTips := IniRead(g_ConfigPath, "Notifications", "ShowTrayTips", "1") = "1"
+global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") = "1"
 
 DirCreate(g_ConfigDir)
+EnsureExcludeFile()
+LoadExcludeWords()
 
 global g_LiveEnabled := IniRead(g_ConfigPath, "General", "LiveEnabled", "0") = "1"
 global g_Suppress := false
@@ -44,6 +50,166 @@ global g_MaxBufferChars := 300
 global g_PendingBoundary := false
 global g_AfterBoundarySpace := false
 global g_LastWindow := WinExist("A")
+
+EnsureExcludeFile() {
+    global g_ExcludePath
+
+    if FileExist(g_ExcludePath) {
+        return
+    }
+
+    defaultText := ""
+    defaultText .= "USB`n"
+    defaultText .= "AHK`n"
+    defaultText .= "PowerShell`n"
+    defaultText .= "GitHub`n"
+    defaultText .= "CMD`n"
+    defaultText .= "Bash`n"
+    defaultText .= "Python`n"
+    defaultText .= "JavaScript`n"
+    defaultText .= "C:\`n"
+    defaultText .= "D:\`n"
+    defaultText .= "http`n"
+    defaultText .= "https`n"
+    defaultText .= "www`n"
+    defaultText .= ".com`n"
+    defaultText .= ".ru`n"
+
+    FileAppend(defaultText, g_ExcludePath, "UTF-8")
+}
+
+
+LoadExcludeWords(*) {
+    global g_ExcludePath, g_ExcludeWords
+
+    g_ExcludeWords := Map()
+    EnsureExcludeFile()
+
+    try {
+        content := FileRead(g_ExcludePath, "UTF-8")
+    } catch {
+        return
+    }
+
+    for line in StrSplit(content, "`n", "`r") {
+        word := Trim(line)
+
+        if (word = "") {
+            continue
+        }
+
+        if (SubStr(word, 1, 1) = "#") {
+            continue
+        }
+
+        g_ExcludeWords[StrLower(word)] := true
+    }
+}
+
+
+SplitByWhitespace(text) {
+    parts := []
+    pos := 1
+
+    while pos := RegExMatch(text, "\s+|\S+", &match, pos) {
+        parts.Push(match[0])
+        pos += StrLen(match[0])
+    }
+
+    return parts
+}
+
+
+IsExcludedToken(token) {
+    global g_ExcludeWords
+
+    trimChars := " `t`r`n'()[]{}<>.,;:!?" . Chr(34)
+
+    raw := StrLower(Trim(token))
+    cleaned := StrLower(Trim(token, trimChars))
+
+    candidates := [raw, cleaned]
+
+    for _, candidate in candidates {
+        if (candidate = "") {
+            continue
+        }
+
+        ; Точное совпадение: USB, PowerShell, GitHub и т.д.
+        if g_ExcludeWords.Has(candidate) {
+            return true
+        }
+
+        ; Windows-пути: C:\Windows, D:\Games и т.д.
+        if (StrLen(candidate) >= 3) {
+            drivePrefix := SubStr(candidate, 1, 3)
+
+            if (SubStr(drivePrefix, 2, 2) = ":\") {
+                if g_ExcludeWords.Has(drivePrefix) {
+                    return true
+                }
+            }
+        }
+
+        ; URL
+        if g_ExcludeWords.Has("http") {
+            if (SubStr(candidate, 1, 7) = "http://") {
+                return true
+            }
+        }
+
+        if g_ExcludeWords.Has("https") {
+            if (SubStr(candidate, 1, 8) = "https://") {
+                return true
+            }
+        }
+
+        if g_ExcludeWords.Has("www") {
+            if (SubStr(candidate, 1, 4) = "www.") {
+                return true
+            }
+        }
+
+        ; Доменные хвосты: github.com, site.ru
+        for item, _ in g_ExcludeWords {
+            if (SubStr(item, 1, 1) = ".") {
+                if (StrLen(candidate) >= StrLen(item)) {
+                    tail := SubStr(candidate, StrLen(candidate) - StrLen(item) + 1)
+
+                    if (tail = item) {
+                        return true
+                    }
+                }
+            }
+        }
+    }
+
+    return false
+}
+
+
+CountLayoutLetters(text, &latin, &cyrillic) {
+    latin := 0
+    cyrillic := 0
+
+    for part in SplitByWhitespace(text) {
+        if part ~= "^\s+$" {
+            continue
+        }
+
+        if IsExcludedToken(part) {
+            continue
+        }
+
+        for ch in StrSplit(part) {
+            if IsLatin(ch) {
+                latin++
+            } else if IsCyrillic(ch) {
+                cyrillic++
+            }
+        }
+    }
+}
 
 SetupTrayMenu()
 
@@ -58,7 +224,7 @@ firstRunDone := IniRead(g_ConfigPath, "General", "FirstRunDone", "0")
 if (firstRunDone != "1") {
     ShowTrainingGui()
 } else {
-    TrayTip("Запущено. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
+    Notify("Запущено. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
 
 ; Сброс буфера при клике мышью.
@@ -76,14 +242,89 @@ $Space::LiveSpacePressed()
 
 
 SetupTrayMenu() {
-    global g_AppName
+    global g_AppName, g_ShowTrayTips, g_PlaySound
 
     A_TrayMenu.Delete()
+
     A_TrayMenu.Add("Показать обучение", ShowTrainingGui)
+    A_TrayMenu.Add("Перезагрузить словарь исключений", ReloadExcludeWords)
+    A_TrayMenu.Add()
+
+    A_TrayMenu.Add("Показывать уведомления", ToggleTrayTips)
+    A_TrayMenu.Add("Звук уведомлений", ToggleNotificationSound)
+
+    if g_ShowTrayTips {
+        A_TrayMenu.Check("Показывать уведомления")
+    } else {
+        A_TrayMenu.Uncheck("Показывать уведомления")
+    }
+
+    if g_PlaySound {
+        A_TrayMenu.Check("Звук уведомлений")
+    } else {
+        A_TrayMenu.Uncheck("Звук уведомлений")
+    }
+
+    A_TrayMenu.Add()
     A_TrayMenu.Add("Включить/выключить live  Win+F10", ToggleLiveMode)
     A_TrayMenu.Add()
     A_TrayMenu.Add("Выход", (*) => ExitApp())
+
     A_IconTip := g_AppName
+}
+
+Notify(message, title := "", options := "Iconi", playSound := false) {
+    global g_AppName, g_ShowTrayTips, g_PlaySound
+
+    if (title = "") {
+        title := g_AppName
+    }
+
+    if !g_ShowTrayTips {
+        return
+    }
+
+    finalOptions := options
+
+    if !g_PlaySound {
+        finalOptions := finalOptions " Mute"
+    }
+
+    TrayTip(message, title, finalOptions)
+}
+
+
+ReloadExcludeWords(*) {
+    global g_AppName, g_ExcludeWords
+
+    LoadExcludeWords()
+    Notify("Словарь исключений перезагружен. Записей: " g_ExcludeWords.Count, g_AppName, "Iconi")
+}
+
+
+ToggleTrayTips(*) {
+    global g_ShowTrayTips, g_ConfigPath, g_AppName
+
+    g_ShowTrayTips := !g_ShowTrayTips
+    IniWrite(g_ShowTrayTips ? "1" : "0", g_ConfigPath, "Notifications", "ShowTrayTips")
+
+    SetupTrayMenu()
+
+    if g_ShowTrayTips {
+        Notify("Уведомления включены", g_AppName, "Iconi")
+    }
+}
+
+
+ToggleNotificationSound(*) {
+    global g_PlaySound, g_ConfigPath, g_AppName
+
+    g_PlaySound := !g_PlaySound
+    IniWrite(g_PlaySound ? "1" : "0", g_ConfigPath, "Notifications", "PlaySound")
+
+    SetupTrayMenu()
+
+    Notify(g_PlaySound ? "Звук уведомлений включён" : "Звук уведомлений выключен", g_AppName, "Iconi", g_PlaySound)
 }
 
 ShowTrainingGui(*) {
@@ -143,7 +384,7 @@ TrainingGuiOk(guiObj) {
     guiObj.Destroy()
 
     ResetTypingBuffer()
-    TrayTip("Готово. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
+    Notify("Готово. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
 
 TrainingGuiCloseOnlyNow(guiObj) {
@@ -161,7 +402,7 @@ ToggleLiveMode(*) {
 
     ResetTypingBuffer()
 
-    TrayTip(g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен", g_AppName, g_LiveEnabled ? "Iconi" : "Icon!")
+    Notify(g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен", g_AppName, g_LiveEnabled ? "Iconi" : "Icon!")
 }
 
 
@@ -179,7 +420,7 @@ ConvertSelectedFullHotkey() {
 
     if !ClipWait(0.7) {
         A_Clipboard := oldClipboard
-        TrayTip("Не удалось скопировать выделение", g_AppName " F12", "Icon!")
+        Notify("Не удалось скопировать выделение", g_AppName " F12", "Icon!")
         return
     }
 
@@ -187,7 +428,7 @@ ConvertSelectedFullHotkey() {
 
     if (text = "") {
         A_Clipboard := oldClipboard
-        TrayTip("Буфер пустой", g_AppName " F12", "Icon!")
+        Notify("Буфер пустой", g_AppName " F12", "Icon!")
         return
     }
 
@@ -195,7 +436,7 @@ ConvertSelectedFullHotkey() {
 
     if (result = text) {
         A_Clipboard := oldClipboard
-        TrayTip("Не стал конвертировать: баланс или без букв", g_AppName " F12", "Iconi")
+        Notify("Не стал конвертировать: баланс или без букв", g_AppName " F12", "Iconi")
         return
     }
 
@@ -207,27 +448,18 @@ ConvertSelectedFullHotkey() {
         Sleep 200
         A_Clipboard := oldClipboard
 
-        TrayTip("Конвертировано и вставлено", g_AppName " F12", "Iconi")
+        Notify("Конвертировано и вставлено", g_AppName " F12", "Iconi", true)
     } catch as err {
         try {
             A_Clipboard := oldClipboard
         }
-        TrayTip("Ошибка вставки: " err.Message, g_AppName " F12", "Iconx")
+        Notify("Ошибка вставки: " err.Message, g_AppName " F12", "Iconx")
     }
 }
 
 
 ConvertWholeByDetectedMajority(text) {
-    latin := 0
-    cyrillic := 0
-
-    for ch in StrSplit(text) {
-        if IsLatin(ch) {
-            latin++
-        } else if IsCyrillic(ch) {
-            cyrillic++
-        }
-    }
+    CountLayoutLetters(text, &latin, &cyrillic)
 
     if ((latin = 0 && cyrillic = 0) || latin = cyrillic) {
         return text
@@ -252,7 +484,7 @@ ConvertSelectedMajorityHotkey() {
 
     if !ClipWait(0.7) {
         A_Clipboard := oldClipboard
-        TrayTip("Не удалось скопировать выделение", g_AppName " F11", "Icon!")
+        Notify("Не удалось скопировать выделение", g_AppName " F11", "Icon!")
         return
     }
 
@@ -260,7 +492,7 @@ ConvertSelectedMajorityHotkey() {
 
     if (text = "") {
         A_Clipboard := oldClipboard
-        TrayTip("Буфер пустой", g_AppName " F11", "Icon!")
+        Notify("Буфер пустой", g_AppName " F11", "Icon!")
         return
     }
 
@@ -268,7 +500,7 @@ ConvertSelectedMajorityHotkey() {
 
     if (result = text) {
         A_Clipboard := oldClipboard
-        TrayTip("Не стал конвертировать: нечего чинить или баланс", g_AppName " F11", "Iconi")
+        Notify("Не стал конвертировать: нечего чинить или баланс", g_AppName " F11", "Iconi")
         return
     }
 
@@ -280,27 +512,18 @@ ConvertSelectedMajorityHotkey() {
         Sleep 200
         A_Clipboard := oldClipboard
 
-        TrayTip("Приведено к большинству и вставлено", g_AppName " F11", "Iconi")
+        Notify("Приведено к большинству и вставлено", g_AppName " F11", "Iconi", true)
     } catch as err {
         try {
             A_Clipboard := oldClipboard
         }
-        TrayTip("Ошибка вставки: " err.Message, g_AppName " F11", "Iconx")
+        Notify("Ошибка вставки: " err.Message, g_AppName " F11", "Iconx")
     }
 }
 
 
 ConvertToMajority(text) {
-    latin := 0
-    cyrillic := 0
-
-    for ch in StrSplit(text) {
-        if IsLatin(ch) {
-            latin++
-        } else if IsCyrillic(ch) {
-            cyrillic++
-        }
-    }
+    CountLayoutLetters(text, &latin, &cyrillic)
 
     if ((latin = 0 && cyrillic = 0) || latin = cyrillic) {
         return text
@@ -348,6 +571,11 @@ ConvertToMajority(text) {
 
 
 ConvertTokenIfMinority(token, table, minorityCheck, majorityCheck, &didChange) {
+    if IsExcludedToken(token) {
+        didChange := false
+        return token
+    }
+
     hasMinority := false
     hasMajority := false
 
@@ -534,21 +762,21 @@ DoLiveConvertAndReplace(rawFragment, title) {
     fragment := RTrim(rawFragment, " `t`r`n")
 
     if (fragment = "") {
-        TrayTip("Буфер фрагмента пустой", title, "Icon!")
+        Notify("Буфер фрагмента пустой", title, "Icon!")
         return
     }
 
     direction := DetectDirectionFromText(fragment)
 
     if (direction = "") {
-        TrayTip("Не понял направление", title, "Icon!")
+        Notify("Не понял направление", title, "Icon!")
         return
     }
 
     converted := ConvertTextByDirection(fragment, direction)
 
     if (converted = fragment) {
-        TrayTip("Нечего менять", title, "Iconi")
+        Notify("Нечего менять", title, "Iconi")
         return
     }
 
@@ -574,13 +802,13 @@ DoLiveConvertAndReplace(rawFragment, title) {
         A_Clipboard := oldClipboard
 
         ResetTypingBuffer(false)
-        TrayTip("Исправлено: " SubStr(converted, 1, 60) (StrLen(converted) > 60 ? "..." : ""), title, "Iconi")
+        Notify("Исправлено: " SubStr(converted, 1, 60) (StrLen(converted) > 60 ? "..." : ""), title, "Iconi", true)
     } catch as err {
         try {
             A_Clipboard := oldClipboard
         }
 
-        TrayTip("Ошибка конвертации: " err.Message, title, "Iconx")
+        Notify("Ошибка конвертации: " err.Message, title, "Iconx")
     }
 
     g_Suppress := false
@@ -705,11 +933,17 @@ IsCyrillic(ch) {
 
 ConvertTextByDirection(text, direction) {
     table := GetConversionTable(direction)
-
     out := ""
 
-    for ch in StrSplit(text) {
-        out .= table.Has(ch) ? table[ch] : ch
+    for part in SplitByWhitespace(text) {
+        if IsExcludedToken(part) {
+            out .= part
+            continue
+        }
+
+        for ch in StrSplit(part) {
+            out .= table.Has(ch) ? table[ch] : ch
+        }
     }
 
     return out
