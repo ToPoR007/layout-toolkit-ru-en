@@ -42,6 +42,10 @@ LoadExcludeWords()
 
 global g_LiveEnabled := IniRead(g_ConfigPath, "General", "LiveEnabled", "0") = "1"
 global g_Suppress := false
+global g_LiveBusy := false
+global g_LivePendingRequest := false
+global g_LivePendingBuffer := ""
+global g_LivePendingLastSpaceTick := 0
 global g_Buffer := ""
 global g_Direction := ""          ; "EN_TO_RU" или "RU_TO_EN"
 global g_LastSpaceTick := 0
@@ -418,7 +422,7 @@ ConvertSelectedFullHotkey() {
     A_Clipboard := ""
     Send "^c"
 
-    if !ClipWait(0.7) {
+    if !ClipWait(1.0) {
         A_Clipboard := oldClipboard
         Notify("Не удалось скопировать выделение", g_AppName " F12", "Icon!")
         return
@@ -441,12 +445,21 @@ ConvertSelectedFullHotkey() {
     }
 
     try {
-        A_Clipboard := result
-        Sleep 50
-        Send "^v"
-
-        Sleep 200
-        A_Clipboard := oldClipboard
+        A_Clipboard := ""
+	Sleep 30
+	A_Clipboard := result
+	
+	if !ClipWait(0.5) {
+		A_Clipboard := oldClipboard
+		Notify("Буфер не успел обновиться. Исходный буфер обмена восстановлен", g_AppName " F12", "Icon!")
+		return
+	}
+	
+	Sleep 150
+	Send "^v"
+	
+	Sleep 500
+	A_Clipboard := oldClipboard
 
         Notify("Конвертировано и вставлено", g_AppName " F12", "Iconi", true)
     } catch as err {
@@ -482,7 +495,7 @@ ConvertSelectedMajorityHotkey() {
     A_Clipboard := ""
     Send "^c"
 
-    if !ClipWait(0.7) {
+    if !ClipWait(1.0) {
         A_Clipboard := oldClipboard
         Notify("Не удалось скопировать выделение", g_AppName " F11", "Icon!")
         return
@@ -505,12 +518,21 @@ ConvertSelectedMajorityHotkey() {
     }
 
     try {
-        A_Clipboard := result
-        Sleep 50
-        Send "^v"
+    A_Clipboard := ""
+	Sleep 30
+	A_Clipboard := result
+	
+	if !ClipWait(0.5) {
+		A_Clipboard := oldClipboard
+		Notify("Буфер не успел обновиться. Исходный буфер обмена восстановлен", g_AppName " F11", "Icon!")
+		return
+	}
 
-        Sleep 200
-        A_Clipboard := oldClipboard
+	Sleep 150
+	Send "^v"
+
+	Sleep 500
+	A_Clipboard := oldClipboard
 
         Notify("Приведено к большинству и вставлено", g_AppName " F11", "Iconi", true)
     } catch as err {
@@ -611,12 +633,106 @@ ConvertTokenIfMinority(token, table, minorityCheck, majorityCheck, &didChange) {
 ; Live double-space
 ; ============================================================
 
+AppendLivePendingChar(char) {
+    global g_LivePendingBuffer, g_LivePendingLastSpaceTick
+    global g_MaxBufferChars
+
+    g_LivePendingBuffer .= char
+
+    if (StrLen(g_LivePendingBuffer) > g_MaxBufferChars) {
+        g_LivePendingBuffer := SubStr(g_LivePendingBuffer, StrLen(g_LivePendingBuffer) - g_MaxBufferChars + 1)
+    }
+
+    ; Любой не-пробельный символ сбрасывает ожидание двойного пробела.
+    g_LivePendingLastSpaceTick := 0
+}
+
+
+HandleLiveSpaceWhileBusy() {
+    global g_LivePendingBuffer, g_LivePendingRequest, g_LivePendingLastSpaceTick
+    global g_DoubleSpaceMs, g_MaxBufferChars
+
+    ; Если во время busy прилетел второй пробел подряд —
+    ; не отправляем его в приложение, а ставим отложенную live-конвертацию.
+    if (EndsWithSpace(g_LivePendingBuffer) && (A_TickCount - g_LivePendingLastSpaceTick) <= g_DoubleSpaceMs) {
+        g_LivePendingLastSpaceTick := 0
+        g_LivePendingRequest := true
+        return
+    }
+
+    ; Иначе это первый обычный пробел нового фрагмента:
+    ; отправляем его в приложение и запоминаем в pending-буфере.
+    g_LivePendingBuffer .= " "
+
+    if (StrLen(g_LivePendingBuffer) > g_MaxBufferChars) {
+        g_LivePendingBuffer := SubStr(g_LivePendingBuffer, StrLen(g_LivePendingBuffer) - g_MaxBufferChars + 1)
+    }
+
+    g_LivePendingLastSpaceTick := A_TickCount
+    SendPlainSpace()
+}
+
+
+FlushLivePendingAfterOperation(title) {
+    global g_LivePendingRequest, g_LivePendingBuffer, g_LivePendingLastSpaceTick
+    global g_Buffer
+
+    pendingRequest := g_LivePendingRequest
+    pendingBuffer := g_LivePendingBuffer
+
+    g_LivePendingRequest := false
+    g_LivePendingBuffer := ""
+    g_LivePendingLastSpaceTick := 0
+
+    if (pendingBuffer = "") {
+        return
+    }
+
+    ; Если пользователь реально успел попросить вторую live-конвертацию,
+    ; пробуем выполнить её после завершения старой операции.
+    ; Но не показываем "буфер пуст", если pending оказался мусорным/пустым.
+    if pendingRequest {
+        fragment := RTrim(pendingBuffer, " `t`r`n")
+
+        if (fragment = "") {
+            return
+        }
+
+        direction := DetectDirectionFromText(fragment)
+
+        if (direction = "") {
+            return
+        }
+
+        converted := ConvertTextByDirection(fragment, direction)
+
+        if (converted = fragment) {
+            return
+        }
+
+        DoLiveConvertAndReplace(pendingBuffer, title)
+        return
+    }
+
+    ; Если пользователь печатал во время busy, но не просил вторую конвертацию,
+    ; переносим накопленное в обычный live-буфер, чтобы границы не потерялись.
+    g_Buffer := pendingBuffer
+    RecalculateBufferState()
+}
+
 LiveSpacePressed() {
-    global g_LiveEnabled, g_Suppress
+    global g_LiveEnabled, g_Suppress, g_LiveBusy
     global g_Buffer, g_Direction
     global g_LastSpaceTick, g_DoubleSpaceMs, g_MaxBufferChars
     global g_PendingBoundary, g_AfterBoundarySpace
     global g_LastWindow
+
+    ; Если live уже выполняет замену, не запускаем вторую операцию параллельно.
+    ; Вместо этого собираем новый ввод в pending-буфер.
+    if g_LiveBusy {
+        HandleLiveSpaceWhileBusy()
+        return
+    }
 
     ; Если live-режим выключен или мы сами что-то отправляем — просто пропускаем пробел.
     if (!g_LiveEnabled || g_Suppress) {
@@ -664,26 +780,40 @@ LiveSpacePressed() {
 SendPlainSpace() {
     global g_Suppress
 
+    oldSuppress := g_Suppress
     g_Suppress := true
+
     Send "{Blind}{Space}"
     Sleep 10
-    g_Suppress := false
+
+    g_Suppress := oldSuppress
 }
 
 
 IH_OnChar(ih, char) {
-    global g_LiveEnabled, g_Suppress
+    global g_LiveEnabled, g_Suppress, g_LiveBusy
     global g_Buffer, g_Direction
     global g_LastSpaceTick, g_MaxBufferChars
     global g_PendingBoundary, g_AfterBoundarySpace
     global g_LastWindow
 
-    if (!g_LiveEnabled || g_Suppress) {
+    if (!g_LiveEnabled) {
         return
     }
 
     ; Пробелы отдельно ловит $Space.
     if (char = " ") {
+        return
+    }
+
+    ; Если live сейчас занят заменой текста, физический ввод пользователя
+    ; складываем во временный pending-буфер, а не теряем.
+    if g_LiveBusy {
+        AppendLivePendingChar(char)
+        return
+    }
+
+    if g_Suppress {
         return
     }
 
@@ -757,7 +887,7 @@ TryLiveConvertDoubleSpace() {
 
 
 DoLiveConvertAndReplace(rawFragment, title) {
-    global g_Suppress
+    global g_Suppress, g_LiveBusy
 
     fragment := RTrim(rawFragment, " `t`r`n")
 
@@ -788,18 +918,31 @@ DoLiveConvertAndReplace(rawFragment, title) {
 
     oldClipboard := ClipboardAll()
     g_Suppress := true
+    g_LiveBusy := true
 
     try {
-        A_Clipboard := converted . " "
-        Sleep 60
-
-        Send "{Backspace " . deleteCount . "}"
-        Sleep 60
-
-        Send "^v"
-        Sleep 220
-
-        A_Clipboard := oldClipboard
+	A_Clipboard := ""
+	Sleep 30
+	A_Clipboard := converted . " "
+	
+        if !ClipWait(0.5) {
+            A_Clipboard := oldClipboard
+            g_Suppress := false
+            g_LiveBusy := false
+            FlushLivePendingAfterOperation(title)
+            Notify("Буфер не успел обновиться. Исходный буфер обмена восстановлен", title, "Icon!")
+            return
+        }
+	
+	Sleep 100
+	
+	Send "{Backspace " . deleteCount . "}"
+	Sleep 100
+	
+	Send "^v"
+	Sleep 450
+	
+	A_Clipboard := oldClipboard
 
         ResetTypingBuffer(false)
         Notify("Исправлено: " SubStr(converted, 1, 60) (StrLen(converted) > 60 ? "..." : ""), title, "Iconi", true)
@@ -812,6 +955,8 @@ DoLiveConvertAndReplace(rawFragment, title) {
     }
 
     g_Suppress := false
+    g_LiveBusy := false
+    FlushLivePendingAfterOperation(title)
 }
 
 
