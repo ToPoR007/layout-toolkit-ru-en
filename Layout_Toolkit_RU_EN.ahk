@@ -39,6 +39,10 @@ global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") =
 DirCreate(g_ConfigDir)
 EnsureExcludeFile()
 LoadExcludeWords()
+iconPath := A_ScriptDir "\icon.ico"
+if FileExist(iconPath) {
+    TraySetIcon(iconPath)
+}
 
 global g_LiveEnabled := IniRead(g_ConfigPath, "General", "LiveEnabled", "0") = "1"
 global g_Suppress := false
