@@ -3,6 +3,7 @@ setlocal
 
 set "APP_NAME=Layout Toolkit RU-EN"
 set "SCRIPT=%~dp0Layout_Toolkit_RU_EN.ahk"
+set "ICON=%~dp0icon.ico"
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "STARTUP_LINK=%STARTUP%\Layout Toolkit RU-EN.lnk"
 set "AHK="
@@ -57,7 +58,12 @@ if not defined AHK (
 )
 
 if not exist "%STARTUP%" (
-    mkdir "%STARTUP%" >nul 2>nul
+    mkdir "%STARTUP%" 2>nul
+    if errorlevel 1 (
+        powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Failed to create startup folder. Check permissions.', 'Layout Toolkit', 'OK', 'Error')"
+        pause
+        goto MENU
+    )
 )
 
 set "BASE=%~dp0"
@@ -69,10 +75,17 @@ set "PS1=%TEMP%\layout_toolkit_startup_%RANDOM%.ps1"
 >> "%PS1%" echo $lnk.Arguments = '"' + $env:SCRIPT + '"'
 >> "%PS1%" echo $lnk.WorkingDirectory = $env:BASE
 >> "%PS1%" echo $lnk.Description = $env:APP_NAME
->> "%PS1%" echo $lnk.IconLocation = $env:AHK + ',0'
+>> "%PS1%" echo if (Test-Path $env:ICON^) { $lnk.IconLocation = $env:ICON } else { $lnk.IconLocation = $env:AHK + ',0' }
 >> "%PS1%" echo $lnk.Save()
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%"
+if errorlevel 1 (
+    del "%PS1%" >nul 2>nul
+    powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('PowerShell failed to create startup shortcut.', 'Layout Toolkit', 'OK', 'Error')"
+    pause
+    goto MENU
+)
+
 del "%PS1%" >nul 2>nul
 
 if exist "%STARTUP_LINK%" (
