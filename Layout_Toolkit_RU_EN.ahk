@@ -255,6 +255,7 @@ SetupTrayMenu() {
     A_TrayMenu.Delete()
 
     A_TrayMenu.Add("Показать обучение", ShowTrainingGui)
+	A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
     A_TrayMenu.Add("Перезагрузить словарь исключений", ReloadExcludeWords)
     A_TrayMenu.Add()
 
@@ -301,6 +302,17 @@ Notify(message, title := "", options := "Iconi", playSound := false) {
     TrayTip(message, title, finalOptions)
 }
 
+OpenExcludeFile(*) {
+    global g_ExcludePath
+
+    EnsureExcludeFile()
+
+    try {
+        Run('notepad.exe "' g_ExcludePath '"')
+    } catch as err {
+        Notify("Не удалось открыть exclude.txt: " err.Message, "Layout Toolkit", "Iconx")
+    }
+}
 
 ReloadExcludeWords(*) {
     global g_AppName, g_ExcludeWords
@@ -343,11 +355,20 @@ ShowTrainingGui(*) {
 
     guiObj.AddText("w720", "Это один общий AHK-скрипт для ручной и live-конвертации раскладки RU/EN.")
     guiObj.AddText("w720", "")
+    guiObj.SetFont("s10 bold", "Segoe UI")
+    guiObj.AddText("xm w500", "Словарь исключений:")
+    btnOpenExclude := guiObj.AddButton("x+10 yp-4 w190 h26", "Открыть exclude.txt")
+    btnOpenExclude.OnEvent("Click", OpenExcludeFile)
+    
+    guiObj.SetFont("s10 norm", "Segoe UI")
+    guiObj.AddText("xm y+8 w720", "Рядом со скриптом есть файл exclude.txt. Слова и фразы из него не конвертируются: USB, PowerShell, GitHub, C:\Windows, ссылки и т.п.")
+    guiObj.AddText("xm w720", "Файл можно редактировать вручную. После изменения нажмите в трее: Перезагрузить словарь исключений.")
+    guiObj.AddText("xm w720", "")
     guiObj.AddText("w720", "1) Win + F12 — выделенный кусок целиком в противоположную раскладку.")
     guiObj.AddText("w720", "   Пример: Ghbdtn/ Rfr ltkf&  →  Привет. Как дела?")
     guiObj.AddText("w720", "")
     guiObj.AddText("w720", "2) Win + F11 — смешанный выделенный текст привести к языку большинства.")
-    guiObj.AddText("w720", "   Пример: Ghbdtn/ Я уже дома, сейчас включу компьютер. Rfr ltkf&")
+    guiObj.AddText("w720", "   Пример: Ghbdtn/ Я уже дома, сейчас включу компьютер. Rfr дела?")
     guiObj.AddText("w720", "        → Привет. Я уже дома, сейчас включу компьютер. Как дела?")
     guiObj.AddText("w720", "")
     guiObj.AddText("w720", "3) Win + F10 — включить/выключить live-режим.")
