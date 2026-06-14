@@ -1,11 +1,19 @@
 ; CapsLockFix.ahk
 ; Исправление регистра выделенного текста.
 ;
+; Зависит от функций основного LT:
+; - SplitByWhitespace(text)
+; - IsExcludedToken(token)
+; - GetCanonicalExcludedToken(token)
+; - Notify(message, title, options, forceSound := false)
+;
 ; Примеры:
 ;   пРИВЕТ -> Привет
-;   эТО ПРИМЕР -> Это пример
-;   gITHUB -> GitHub
-;   pOWERSHELL -> PowerShell
+;   ОНО НЕ ДОЛЖНО БАГОВАТЬ -> Оно не должно баговать
+;   yABAI SUKA БЛЯТЬ -> Yabai suka блять
+;   GitHUB -> GitHub
+;   POWERSHELL -> PowerShell
+
 
 CapsLockFixSelectedHotkey() {
     global g_AppName
@@ -40,6 +48,7 @@ CapsLockFixSelectedHotkey() {
     try {
         A_Clipboard := ""
         Sleep 30
+
         A_Clipboard := result
 
         if !ClipWait(0.5) {
@@ -67,13 +76,24 @@ CapsLockFixSelectedHotkey() {
 
 FixCapsLockText(text) {
     out := ""
+    capitalizeNext := true
 
     for part in SplitByWhitespace(text) {
+        ; Сохраняем пробелы / переносы как есть.
         if part ~= "^\s+$" {
             out .= part
+
+            ; После переноса строки следующее слово считаем началом новой фразы.
+            if InStr(part, "`n") || InStr(part, "`r") {
+                capitalizeNext := true
+            }
+
             continue
         }
 
+        ; exclude.txt работает как словарь канонического написания:
+        ; GitHUB -> GitHub
+        ; POWERSHELL -> PowerShell
         if IsExcludedToken(part) {
             canonical := GetCanonicalExcludedToken(part)
 
@@ -83,17 +103,30 @@ FixCapsLockText(text) {
                 out .= part
             }
 
+            if CapsFix_TokenEndsSentence(part) {
+                capitalizeNext := true
+            } else {
+                capitalizeNext := false
+            }
+
             continue
         }
 
-        out .= SmartCapsFixToken(part)
+        fixed := CapsFix_SmartFixToken(part, capitalizeNext)
+        out .= fixed
+
+        if CapsFix_TokenEndsSentence(fixed) {
+            capitalizeNext := true
+        } else {
+            capitalizeNext := false
+        }
     }
 
     return out
 }
 
 
-SmartCapsFixToken(token) {
+CapsFix_SmartFixToken(token, capitalizeFirst := false) {
     trimChars := " `t`r`n'()[]{}<>.,;:!?" . Chr(34)
 
     core := Trim(token, trimChars)
@@ -111,39 +144,61 @@ SmartCapsFixToken(token) {
     prefix := SubStr(token, 1, startPos - 1)
     suffix := SubStr(token, startPos + StrLen(core))
 
-    if !ShouldSmartFixCore(core) {
+    if !CapsFix_ShouldFixCore(core) {
         return token
     }
 
-    fixed := SmartTitleCore(core)
+    fixedCore := CapsFix_ToSentenceCore(core, capitalizeFirst)
 
-    return prefix fixed suffix
+    return prefix fixedCore suffix
 }
 
 
-ShouldSmartFixCore(core) {
+CapsFix_ShouldFixCore(core) {
     upperCount := 0
     lowerCount := 0
+    firstLetterSeen := false
+    firstLetterIsLower := false
 
-    for ch in StrSplit(core) {
-        if IsUpperLetter(ch) {
+    Loop Parse core {
+        ch := A_LoopField
+
+        if CapsFix_IsUpperLetter(ch) {
             upperCount++
-        } else if IsLowerLetter(ch) {
+
+            if !firstLetterSeen {
+                firstLetterSeen := true
+            }
+        } else if CapsFix_IsLowerLetter(ch) {
             lowerCount++
+
+            if !firstLetterSeen {
+                firstLetterSeen := true
+                firstLetterIsLower := true
+            }
         }
     }
 
+    ; Вообще нет букв верхнего регистра — нечего чинить.
     if (upperCount = 0) {
         return false
     }
 
-    ; ПРИВЕТ -> Привет
+    ; Полный капс:
+    ; YABAI / SUKA / ПРИВЕТ / БЛЯТЬ
     if (upperCount > 0 && lowerCount = 0) {
         return true
     }
 
-    ; пРИВЕТ / эТО / нАПИСАЛ -> Привет / Это / Написал
-    if (upperCount > lowerCount) {
+    ; Классический случай случайного CapsLock:
+    ; yABAI / пРИВЕТ / эТО
+    if (firstLetterIsLower && upperCount > 0) {
+        return true
+    }
+
+    ; Подозрительная пачка верхнего регистра внутри слова:
+    ; GitHUB / abCD / helloWORLD
+    if (upperCount >= 2) {
         return true
     }
 
@@ -151,16 +206,40 @@ ShouldSmartFixCore(core) {
 }
 
 
-SmartTitleCore(core) {
+CapsFix_ToSentenceCore(core, capitalizeFirst := false) {
+    lower := CapsFix_ToLowerText(core)
+
+    if !capitalizeFirst {
+        return lower
+    }
+
+    return CapsFix_UpperFirstLetter(lower)
+}
+
+
+CapsFix_ToLowerText(text) {
+    result := ""
+
+    Loop Parse text {
+        result .= CapsFix_ToLowerChar(A_LoopField)
+    }
+
+    return result
+}
+
+
+CapsFix_UpperFirstLetter(text) {
     result := ""
     firstLetterDone := false
 
-    for ch in StrSplit(core) {
-        if !firstLetterDone && IsAnyLetter(ch) {
-            result .= StrUpper(ch)
+    Loop Parse text {
+        ch := A_LoopField
+
+        if !firstLetterDone && CapsFix_IsAnyLetter(ch) {
+            result .= CapsFix_ToUpperChar(ch)
             firstLetterDone := true
         } else {
-            result .= StrLower(ch)
+            result .= ch
         }
     }
 
@@ -168,16 +247,81 @@ SmartTitleCore(core) {
 }
 
 
-IsAnyLetter(ch) {
-    return IsUpperLetter(ch) || IsLowerLetter(ch)
+CapsFix_ToLowerChar(ch) {
+    code := Ord(ch)
+
+    ; A-Z -> a-z
+    if (code >= 0x41 && code <= 0x5A) {
+        return Chr(code + 32)
+    }
+
+    ; А-Я -> а-я
+    if (code >= 0x410 && code <= 0x42F) {
+        return Chr(code + 32)
+    }
+
+    ; Ё -> ё
+    if (code = 0x401) {
+        return Chr(0x451)
+    }
+
+    return ch
 }
 
 
-IsUpperLetter(ch) {
-    return ch ~= "^[A-ZА-ЯЁ]$"
+CapsFix_ToUpperChar(ch) {
+    code := Ord(ch)
+
+    ; a-z -> A-Z
+    if (code >= 0x61 && code <= 0x7A) {
+        return Chr(code - 32)
+    }
+
+    ; а-я -> А-Я
+    if (code >= 0x430 && code <= 0x44F) {
+        return Chr(code - 32)
+    }
+
+    ; ё -> Ё
+    if (code = 0x451) {
+        return Chr(0x401)
+    }
+
+    return ch
 }
 
 
-IsLowerLetter(ch) {
-    return ch ~= "^[a-zа-яё]$"
+CapsFix_TokenEndsSentence(token) {
+    trimmed := Trim(token)
+
+    if (trimmed = "") {
+        return false
+    }
+
+    lastChar := SubStr(trimmed, -1)
+
+    return lastChar = "." || lastChar = "!" || lastChar = "?" || lastChar = "…" || lastChar = ":"
+}
+
+
+CapsFix_IsAnyLetter(ch) {
+    return CapsFix_IsUpperLetter(ch) || CapsFix_IsLowerLetter(ch)
+}
+
+
+CapsFix_IsUpperLetter(ch) {
+    code := Ord(ch)
+
+    return (code >= 0x41 && code <= 0x5A)      ; A-Z
+        || (code >= 0x410 && code <= 0x42F)    ; А-Я
+        || (code = 0x401)                      ; Ё
+}
+
+
+CapsFix_IsLowerLetter(ch) {
+    code := Ord(ch)
+
+    return (code >= 0x61 && code <= 0x7A)      ; a-z
+        || (code >= 0x430 && code <= 0x44F)    ; а-я
+        || (code = 0x451)                      ; ё
 }
