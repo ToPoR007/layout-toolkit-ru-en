@@ -33,6 +33,12 @@ SendMode "Input"
 
 global g_AppName := "Layout Toolkit"
 
+; Ресурсы программы.
+global g_AssetsDir := A_ScriptDir "\Assets"
+global g_IconPath := g_AssetsDir "\icon.ico"
+global g_DefaultExcludePath := g_AssetsDir "\exclude.default.txt"
+global g_DefaultHotkeysPath := g_AssetsDir "\hotkeys.default.ini"
+
 ; Новое пользовательское хранилище:
 ; Documents\Layout Toolkit\
 global g_ConfigDir := A_MyDocuments "\Layout Toolkit"
@@ -53,9 +59,9 @@ LoadExcludeWords()
 
 global g_ShowTrayTips := IniRead(g_ConfigPath, "Notifications", "ShowTrayTips", "1") = "1"
 global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") = "1"
-iconPath := A_ScriptDir "\icon.ico"
-if FileExist(iconPath) {
-    TraySetIcon(iconPath)
+
+if FileExist(g_IconPath) {
+    TraySetIcon(g_IconPath)
 }
 
 global g_LiveEnabled := IniRead(g_ConfigPath, "General", "LiveEnabled", "0") = "1"
@@ -104,12 +110,22 @@ MigrateUserData() {
 }
 
 EnsureExcludeFile() {
-    global g_ExcludePath
+    global g_ExcludePath, g_DefaultExcludePath
 
     if FileExist(g_ExcludePath) {
         return
     }
 
+    ; Новый нормальный путь:
+    ; Assets\exclude.default.txt -> Documents\Layout Toolkit\exclude.txt
+    if FileExist(g_DefaultExcludePath) {
+        try {
+            FileCopy(g_DefaultExcludePath, g_ExcludePath, false)
+            return
+        }
+    }
+
+    ; Fallback, если Assets потеряли или запуск идёт из странной сборки.
     defaultText := ""
     defaultText .= "USB`n"
     defaultText .= "AHK`n"
