@@ -66,6 +66,125 @@ Z gbie ntrcn/
 
 ---
 
+### Ctrl + Shift + U — Unicode Input
+
+Позволяет вставлять Unicode-символы по HEX-коду.
+
+Примеры:
+
+```text
+2014
+`````
+
+вставит:
+
+```text
+—
+```
+
+Можно вводить несколько кодов:
+
+```text
+0060 2014 0060
+```
+
+вставит:
+
+```text
+`—`
+```
+
+Также поддерживается слитный ввод блоками по 4 HEX-символа:
+
+```text
+006020140060
+```
+
+вставит:
+
+```text
+`—`
+```
+
+Если нужен настоящий пробел в выводе, используйте код `0020`.
+
+---
+
+### Win + Shift + F12 — CapsLock Fix
+
+Исправляет регистр выделенного текста, если текст был набран с ошибочным CapsLock.
+
+Примеры:
+
+```text
+пРИВЕТ
+```
+
+станет:
+
+```text
+Привет
+```
+
+```text
+эТО ПРИМЕР
+```
+
+станет:
+
+```text
+Это пример
+```
+
+CapsLock Fix также использует `exclude.txt` как словарь канонического написания:
+
+```text
+GitHUB
+POWERSHELL
+```
+
+станет:
+
+```text
+GitHub
+PowerShell
+```
+
+---
+
+## Пользовательские файлы
+
+Layout Toolkit хранит пользовательские настройки и словарь исключений в папке:
+
+```text
+Documents\Layout Toolkit
+```
+
+Основные файлы:
+
+```text
+settings.ini
+exclude.txt
+```
+
+`exclude.txt` используется для слов и фрагментов, которые нельзя портить автоматической обработкой: технические термины, команды, пути, ссылки и названия вроде `PowerShell`, `GitHub`, `USB`.
+
+Если слово из `exclude.txt` написано в неправильном регистре, некоторые функции могут восстановить его канонический вид.
+
+Пример:
+
+```text
+pOWERSHELL
+```
+
+станет:
+
+```text
+PowerShell
+```
+
+---
+
 ## Быстрый запуск
 
 1. Запустите `Run_Layout_Toolkit.cmd`.
@@ -193,6 +312,125 @@ becomes:
 
 ```text
 Я пишу текст. 
+```
+
+---
+
+### Ctrl + Shift + U — Unicode Input
+
+Allows inserting Unicode characters by HEX code.
+
+Examples:
+
+```text
+2014
+```
+
+inserts:
+
+```text
+—
+```
+
+Multiple codes are supported:
+
+```text
+0060 2014 0060
+```
+
+inserts:
+
+```text
+`—`
+```
+
+Compact 4-digit blocks are also supported:
+
+```text
+006020140060
+```
+
+inserts:
+
+```text
+`—`
+```
+
+Use `0020` if you need a real space character.
+
+---
+
+### Win + Shift + F12 — CapsLock Fix
+
+Fixes the case of selected text typed with accidental CapsLock.
+
+Examples:
+
+```text
+пРИВЕТ
+```
+
+becomes:
+
+```text
+Привет
+```
+
+```text
+эТО ПРИМЕР
+```
+
+becomes:
+
+```text
+Это пример
+```
+
+CapsLock Fix also uses `exclude.txt` as a canonical spelling dictionary:
+
+```text
+GitHUB
+POWERSHELL
+```
+
+becomes:
+
+```text
+GitHub
+PowerShell
+```
+
+---
+
+## User files
+
+Layout Toolkit stores user settings and the exclusion dictionary in:
+
+```text
+Documents\Layout Toolkit
+```
+
+Main files:
+
+```text
+settings.ini
+exclude.txt
+```
+
+`exclude.txt` is used for words and fragments that should not be damaged by automatic processing: technical terms, commands, paths, links, and names like `PowerShell`, `GitHub`, `USB`.
+
+Some functions can also restore the canonical spelling from `exclude.txt`.
+
+Example:
+
+```text
+pOWERSHELL
+```
+
+becomes:
+
+```text
+PowerShell
 ```
 
 ---

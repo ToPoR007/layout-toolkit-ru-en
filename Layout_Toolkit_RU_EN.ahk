@@ -2,6 +2,9 @@
 #SingleInstance Force
 #UseHook
 
+#Include Modules\UnicodeInput.ahk
+#Include Modules\CapsLockFix.ahk
+
 ; ============================================================
 ; Layout Toolkit RU/EN
 ;
@@ -29,16 +32,27 @@ Persistent
 SendMode "Input"
 
 global g_AppName := "Layout Toolkit"
-global g_ConfigDir := A_AppData "\LayoutToolkit"
-global g_ConfigPath := g_ConfigDir "\settings.ini"
-global g_ExcludePath := A_ScriptDir "\exclude.txt"
-global g_ExcludeWords := Map()
-global g_ShowTrayTips := IniRead(g_ConfigPath, "Notifications", "ShowTrayTips", "1") = "1"
-global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") = "1"
 
-DirCreate(g_ConfigDir)
+; Новое пользовательское хранилище:
+; Documents\Layout Toolkit\
+global g_ConfigDir := A_MyDocuments "\Layout Toolkit"
+global g_ConfigPath := g_ConfigDir "\settings.ini"
+global g_ExcludePath := g_ConfigDir "\exclude.txt"
+
+; Старые пути нужны только для мягкой миграции.
+global g_LegacyConfigDir := A_AppData "\LayoutToolkit"
+global g_LegacyConfigPath := g_LegacyConfigDir "\settings.ini"
+global g_LegacyExcludePath := A_ScriptDir "\exclude.txt"
+
+global g_ExcludeWords := Map()
+
+EnsureUserDataDir()
+MigrateUserData()
 EnsureExcludeFile()
 LoadExcludeWords()
+
+global g_ShowTrayTips := IniRead(g_ConfigPath, "Notifications", "ShowTrayTips", "1") = "1"
+global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") = "1"
 iconPath := A_ScriptDir "\icon.ico"
 if FileExist(iconPath) {
     TraySetIcon(iconPath)
@@ -58,6 +72,36 @@ global g_MaxBufferChars := 300
 global g_PendingBoundary := false
 global g_AfterBoundarySpace := false
 global g_LastWindow := WinExist("A")
+
+EnsureUserDataDir() {
+    global g_ConfigDir
+
+    try {
+        DirCreate(g_ConfigDir)
+    } catch as err {
+        MsgBox("Не удалось создать папку настроек:`n" g_ConfigDir "`n`n" err.Message, "Layout Toolkit", "Iconx")
+    }
+}
+
+
+MigrateUserData() {
+    global g_ConfigPath, g_ExcludePath
+    global g_LegacyConfigPath, g_LegacyExcludePath
+
+    ; settings.ini: старый AppData -> новый Documents
+    if (!FileExist(g_ConfigPath) && FileExist(g_LegacyConfigPath)) {
+        try {
+            FileCopy(g_LegacyConfigPath, g_ConfigPath, false)
+        }
+    }
+
+    ; exclude.txt: старый файл рядом со скриптом -> новый Documents
+    if (!FileExist(g_ExcludePath) && FileExist(g_LegacyExcludePath)) {
+        try {
+            FileCopy(g_LegacyExcludePath, g_ExcludePath, false)
+        }
+    }
+}
 
 EnsureExcludeFile() {
     global g_ExcludePath
@@ -110,7 +154,7 @@ LoadExcludeWords(*) {
             continue
         }
 
-        g_ExcludeWords[StrLower(word)] := true
+        g_ExcludeWords[StrLower(word)] := word
     }
 }
 
@@ -125,6 +169,40 @@ SplitByWhitespace(text) {
     }
 
     return parts
+}
+
+GetCanonicalExcludedToken(token) {
+    global g_ExcludeWords
+
+    trimChars := " `t`r`n'()[]{}<>.,;:!?" . Chr(34)
+
+    raw := Trim(token)
+    cleaned := Trim(token, trimChars)
+
+    rawKey := StrLower(raw)
+    cleanedKey := StrLower(cleaned)
+
+    ; Полное совпадение без обрезки пунктуации.
+    if (rawKey != "" && g_ExcludeWords.Has(rawKey)) {
+        return g_ExcludeWords[rawKey]
+    }
+
+    ; Совпадение с обрезкой пунктуации по краям.
+    if (cleanedKey != "" && g_ExcludeWords.Has(cleanedKey)) {
+        canonical := g_ExcludeWords[cleanedKey]
+
+        startPos := InStr(token, cleaned)
+
+        if (startPos > 0) {
+            prefix := SubStr(token, 1, startPos - 1)
+            suffix := SubStr(token, startPos + StrLen(cleaned))
+            return prefix canonical suffix
+        }
+
+        return canonical
+    }
+
+    return ""
 }
 
 
@@ -226,7 +304,9 @@ ih := InputHook("V")
 ih.OnChar := IH_OnChar
 ih.OnKeyDown := IH_OnKeyDown
 ih.KeyOpt("{Backspace}{Enter}{Tab}{Esc}{Left}{Right}{Up}{Down}{Home}{End}{Delete}{PgUp}{PgDn}", "N")
-ih.Start()
+if g_LiveEnabled {
+    ih.Start()
+}
 
 firstRunDone := IniRead(g_ConfigPath, "General", "FirstRunDone", "0")
 if (firstRunDone != "1") {
@@ -241,21 +321,28 @@ if (firstRunDone != "1") {
 ~MButton::ResetTypingBuffer()
 
 ; Пробел ловим сами, чтобы второй пробел был командой, а не обычным вводом.
+#HotIf g_LiveEnabled
 $Space::LiveSpacePressed()
+#HotIf
 
 ; Горячие клавиши.
 #F12::ConvertSelectedFullHotkey()
 #F11::ConvertSelectedMajorityHotkey()
 #F10::ToggleLiveMode()
 
+; Temporary hotkey until configurable hotkeys GUI is implemented.
+^+u::UnicodeInput()
+#+F12::CapsLockFixSelectedHotkey()
+
 
 SetupTrayMenu() {
-    global g_AppName, g_ShowTrayTips, g_PlaySound
+    global g_AppName, g_ShowTrayTips, g_PlaySound, g_LiveEnabled
 
     A_TrayMenu.Delete()
 
     A_TrayMenu.Add("Показать обучение", ShowTrainingGui)
-	A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
+    A_TrayMenu.Add("Открыть папку Layout Toolkit", OpenUserDataDir)
+    A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
     A_TrayMenu.Add("Перезагрузить словарь исключений", ReloadExcludeWords)
     A_TrayMenu.Add()
 
@@ -275,7 +362,14 @@ SetupTrayMenu() {
     }
 
     A_TrayMenu.Add()
-    A_TrayMenu.Add("Включить/выключить live  Win+F10", ToggleLiveMode)
+    A_TrayMenu.Add("Live-режим  Win+F10", ToggleLiveMode)
+
+    if g_LiveEnabled {
+        A_TrayMenu.Check("Live-режим  Win+F10")
+    } else {
+        A_TrayMenu.Uncheck("Live-режим  Win+F10")
+    }
+
     A_TrayMenu.Add()
     A_TrayMenu.Add("Выход", (*) => ExitApp())
 
@@ -300,6 +394,18 @@ Notify(message, title := "", options := "Iconi", playSound := false) {
     }
 
     TrayTip(message, title, finalOptions)
+}
+
+OpenUserDataDir(*) {
+    global g_ConfigDir
+
+    EnsureUserDataDir()
+
+    try {
+        Run('explorer.exe "' g_ConfigDir '"')
+    } catch as err {
+        Notify("Не удалось открыть папку Layout Toolkit: " err.Message, "Layout Toolkit", "Iconx")
+    }
 }
 
 OpenExcludeFile(*) {
@@ -361,7 +467,7 @@ ShowTrainingGui(*) {
     btnOpenExclude.OnEvent("Click", OpenExcludeFile)
     
     guiObj.SetFont("s10 norm", "Segoe UI")
-    guiObj.AddText("xm y+8 w720", "Рядом со скриптом есть файл exclude.txt. Слова и фразы из него не конвертируются: USB, PowerShell, GitHub, C:\Windows, ссылки и т.п.")
+    guiObj.AddText("xm y+8 w720", "Файл exclude.txt хранится в папке Documents\Layout Toolkit. Слова и фразы из него не конвертируются: USB, PowerShell, GitHub, C:\Windows, ссылки и т.п.")
     guiObj.AddText("xm w720", "Файл можно редактировать вручную. После изменения нажмите в трее: Перезагрузить словарь исключений.")
     guiObj.AddText("xm w720", "")
     guiObj.AddText("w720", "1) Win + F12 — выделенный кусок целиком в противоположную раскладку.")
@@ -424,14 +530,31 @@ TrainingGuiCloseOnlyNow(guiObj) {
 }
 
 ToggleLiveMode(*) {
-    global g_LiveEnabled, g_ConfigPath, g_AppName
+    global g_LiveEnabled, g_ConfigPath, g_AppName, ih
 
     g_LiveEnabled := !g_LiveEnabled
     IniWrite(g_LiveEnabled ? "1" : "0", g_ConfigPath, "General", "LiveEnabled")
 
     ResetTypingBuffer()
 
-    Notify(g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен", g_AppName, g_LiveEnabled ? "Iconi" : "Icon!")
+    try {
+        if g_LiveEnabled {
+            ih.Start()
+        } else {
+            ih.Stop()
+        }
+    } catch as err {
+        Notify("Ошибка переключения live-хука: " err.Message, g_AppName, "Icon!")
+        return
+    }
+
+    SetupTrayMenu()
+
+    Notify(
+        g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен",
+        g_AppName,
+        g_LiveEnabled ? "Iconi" : "Icon!"
+    )
 }
 
 
@@ -880,15 +1003,56 @@ IH_OnChar(ih, char) {
     }
 }
 
+IsLiveSpaceArmBreakerKey(keyName) {
+    static ignored := Map(
+        "Space", true,
+        "Shift", true,
+        "LShift", true,
+        "RShift", true,
+        "Ctrl", true,
+        "Control", true,
+        "LControl", true,
+        "RControl", true,
+        "Alt", true,
+        "LAlt", true,
+        "RAlt", true,
+        "LWin", true,
+        "RWin", true,
+        "CapsLock", true,
+        "NumLock", true,
+        "ScrollLock", true
+    )
+
+    return !ignored.Has(keyName)
+}
+
 
 IH_OnKeyDown(ih, vk, sc) {
-    global g_LiveEnabled, g_Suppress, g_Buffer
+    global g_LiveEnabled, g_Suppress, g_LiveBusy
+    global g_Buffer, g_LastSpaceTick
+    global g_LivePendingLastSpaceTick
 
-    if (!g_LiveEnabled || g_Suppress) {
+    if (!g_LiveEnabled) {
         return
     }
 
     keyName := GetKeyName(Format("vk{:02X}sc{:03X}", vk, sc))
+
+    ; Важно:
+    ; $Space ловит пробел отдельно.
+    ; Но если между двумя пробелами была любая обычная клавиша,
+    ; значит это НЕ двойной пробел для live-конвертации.
+    if IsLiveSpaceArmBreakerKey(keyName) {
+        if g_LiveBusy {
+            g_LivePendingLastSpaceTick := 0
+        } else {
+            g_LastSpaceTick := 0
+        }
+    }
+
+    if g_Suppress {
+        return
+    }
 
     switch keyName {
         case "Backspace":
