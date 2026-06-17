@@ -1,270 +1,64 @@
 # Layout Toolkit RU-EN
 
-## Русский
-
-Небольшая утилита для Windows, которая помогает исправлять текст, набранный в неправильной раскладке RU/EN.
-
-Работает через **AutoHotkey v2**.
-
----
-
-## Что умеет
-
-### Win + F12 — полная конвертация выделенного текста
-
-Используется, когда весь выделенный фрагмент набран в неправильной раскладке.
-
-Пример:
-
-```text
-Ghbdtn/ Rfr ltkf&
-```
-
-станет:
-
-```text
-Привет. Как дела?
-```
-
----
-
-### Win + F11 — исправление смешанного текста
-
-Используется, когда часть текста набрана нормально, а часть — в неправильной раскладке.
-
-Скрипт определяет язык большинства и исправляет только “чужие” фрагменты.
-
-Пример:
-
-```text
-Ghbdtn/ Я уже дома, сейчас включу компьютер. Rfr дела?
-```
-
-станет:
-
-```text
-Привет. Я уже дома, сейчас включу компьютер. Как дела?
-```
-
----
-
-### Win + F10 — включить или выключить live-режим
-
-Live-режим позволяет исправлять текущий набранный фрагмент двойным пробелом.
-
-Пример:
-
-```text
-Z gbie ntrcn/  
-```
-
-станет:
-
-```text
-Я пишу текст. 
-```
-
----
-
-### Ctrl + Shift + U — Unicode Input
-
-Позволяет вставлять Unicode-символы по HEX-коду.
-
-Примеры:
-
-```text
-2014
-```
-
-вставит:
-
-```text
-—
-```
-
-Можно вводить несколько кодов:
-
-```text
-0060 2014 0060
-```
-
-вставит:
-
-```text
-`—`
-```
-
-Также поддерживается слитный ввод блоками по 4 HEX-символа:
-
-```text
-006020140060
-```
-
-вставит:
-
-```text
-`—`
-```
-
-Если нужен настоящий пробел в выводе, используйте код `0020`.
-
----
-
-### Win + Shift + F12 — CapsLock Fix
-
-Исправляет регистр выделенного текста, если текст был набран с ошибочным CapsLock.
-
-Примеры:
-
-```text
-пРИВЕТ
-```
-
-станет:
-
-```text
-Привет
-```
-
-```text
-эТО ПРИМЕР
-```
-
-станет:
-
-```text
-Это пример
-```
-
-CapsLock Fix также использует `exclude.txt` как словарь канонического написания:
-
-```text
-GitHUB
-POWERSHELL
-```
-
-станет:
-
-```text
-GitHub
-PowerShell
-```
-
----
-
-## Пользовательские файлы
-
-Layout Toolkit хранит пользовательские настройки и словарь исключений в папке:
-
-```text
-Documents\Layout Toolkit
-```
-
-Основные файлы:
-
-```text
-settings.ini
-exclude.txt
-```
-
-`exclude.txt` используется для слов и фрагментов, которые нельзя портить автоматической обработкой: технические термины, команды, пути, ссылки и названия вроде `PowerShell`, `GitHub`, `USB`.
-
-Если слово из `exclude.txt` написано в неправильном регистре, некоторые функции могут восстановить его канонический вид.
-
-Пример:
-
-```text
-pOWERSHELL
-```
-
-станет:
-
-```text
-PowerShell
-```
-
----
-
-## Быстрый запуск
-
-1. Запустите `Run_Layout_Toolkit.cmd`.
-2. Если AutoHotkey v2 не установлен, откроется официальный сайт AutoHotkey.
-3. Установите AutoHotkey v2.
-4. Снова запустите `Run_Layout_Toolkit.cmd`.
-
----
-
-## Автозапуск
-
-Запустите:
-
-```text
-Startup_Manager.cmd
-```
-
-В нём можно:
-
-* добавить Layout Toolkit в автозагрузку Windows;
-* удалить Layout Toolkit из автозагрузки Windows.
-
----
-
-## Требования
-
-* Windows 10 или Windows 11
-* AutoHotkey v2
-
----
-
-## Важное предупреждение
-
-Live-режим сам нажимает:
-
-```text
-Backspace
-Ctrl + V
-```
-
-Поэтому его лучше использовать только в:
-
-* мессенджерах;
-* поисковых строках;
-* коротких полях ввода;
-* быстрых заметках.
-
-Для дипломов, книг, статей и длинных документов безопаснее использовать:
-
-```text
-Win + F11
-Win + F12
-```
-
----
-
-## Известные ограничения
-
-* Live-режим предназначен в основном для коротких сообщений.
-* В некоторых приложениях автоматические Backspace / Ctrl+V могут работать нестандартно.
-* Для длинных документов live-режим не рекомендуется.
-* Требуется установленный AutoHotkey v2.
-
----
-
-## English
-
 A small Windows utility for fixing text typed in the wrong RU/EN keyboard layout.
+
+Небольшая утилита для Windows, которая помогает исправлять текст, набранный в неправильной RU/EN-раскладке.
 
 Powered by **AutoHotkey v2**.
 
 ---
 
-## Features
+## Features / Возможности
 
-### Win + F12 — full selected text conversion
+- Fix selected text typed in the wrong RU/EN layout.
+- Majority mode for mixed RU/EN text.
+- Live mode: fix the current typed fragment with double space.
+- Unicode Input: insert Unicode characters by HEX code.
+- CapsLock Fix: repair accidental CapsLock case.
+- Settings GUI with hotkeys, exclusions and live-mode settings.
+- User files stored in `Documents\Layout Toolkit`.
 
-Use this when the entire selected fragment was typed in the wrong layout.
+---
 
-Example:
+## Quick start / Быстрый запуск
+
+1. Install **AutoHotkey v2**.
+2. Download the project or release archive.
+3. Run:
+
+```text
+Run_Layout_Toolkit.cmd
+````
+
+If AutoHotkey v2 is missing, the launcher will open the official AutoHotkey website.
+
+---
+
+## Default hotkeys / Хоткеи по умолчанию
+
+| Action                     | Hotkey              |
+| -------------------------- | ------------------- |
+| Full layout conversion     | `Win + F12`         |
+| Majority layout conversion | `Win + F11`         |
+| Toggle live mode           | `Win + F10`         |
+| Unicode Input              | `Ctrl + Shift + U`  |
+| CapsLock Fix               | `Win + Shift + F12` |
+
+Hotkeys can be changed in:
+
+```text
+Documents\Layout Toolkit\hotkeys.ini
+```
+
+They can also be opened and reloaded from the Settings GUI.
+
+---
+
+## How it works / Как это работает
+
+### Layout Fix
+
+Use this when selected text was typed in the wrong layout.
 
 ```text
 Ghbdtn/ Rfr ltkf&
@@ -276,33 +70,23 @@ becomes:
 Привет. Как дела?
 ```
 
----
+### Majority mode
 
-### Win + F11 — mixed text correction
-
-Use this when part of the text is correct and another part was typed in the wrong layout.
-
-The script detects the majority language and fixes only the “foreign” fragments.
-
-Example:
+Useful for mixed text where only some fragments are in the wrong layout.
 
 ```text
-Ghbdtn/ Я уже дома, сейчас включу компьютер. Rfr ltkf&
+Ghbdtn/ Я уже дома. Rfr дела?
 ```
 
 becomes:
 
 ```text
-Привет. Я уже дома, сейчас включу компьютер. Как дела?
+Привет. Я уже дома. Как дела?
 ```
 
----
+### Live mode
 
-### Win + F10 — toggle live mode
-
-Live mode allows you to fix the current typed fragment with a double space.
-
-Example:
+Live mode fixes the current typed fragment after a double space.
 
 ```text
 Z gbie ntrcn/  
@@ -314,13 +98,13 @@ becomes:
 Я пишу текст. 
 ```
 
----
+Live mode sends synthetic `Backspace` and paste actions, so it is best for messengers, search fields and short input fields.
 
-### Ctrl + Shift + U — Unicode Input
+For long documents, use selected-text conversion instead.
 
-Allows inserting Unicode characters by HEX code.
+### Unicode Input
 
-Examples:
+Input Unicode characters by HEX code:
 
 ```text
 2014
@@ -344,27 +128,11 @@ inserts:
 `—`
 ```
 
-Compact 4-digit blocks are also supported:
+The Settings GUI can open Unicode Input in clipboard mode.
 
-```text
-006020140060
-```
+### CapsLock Fix
 
-inserts:
-
-```text
-`—`
-```
-
-Use `0020` if you need a real space character.
-
----
-
-### Win + Shift + F12 — CapsLock Fix
-
-Fixes the case of selected text typed with accidental CapsLock.
-
-Examples:
+Fix selected text typed with accidental CapsLock:
 
 ```text
 пРИВЕТ
@@ -377,34 +145,22 @@ becomes:
 ```
 
 ```text
-эТО ПРИМЕР
+pOWERSHELL
 ```
 
-becomes:
+can become:
 
 ```text
-Это пример
-```
-
-CapsLock Fix also uses `exclude.txt` as a canonical spelling dictionary:
-
-```text
-GitHUB
-POWERSHELL
-```
-
-becomes:
-
-```text
-GitHub
 PowerShell
 ```
 
+if `PowerShell` is listed in `exclude.txt`.
+
 ---
 
-## User files
+## User files / Пользовательские файлы
 
-Layout Toolkit stores user settings and the exclusion dictionary in:
+Layout Toolkit stores user data here:
 
 ```text
 Documents\Layout Toolkit
@@ -414,37 +170,43 @@ Main files:
 
 ```text
 settings.ini
+hotkeys.ini
 exclude.txt
 ```
 
-`exclude.txt` is used for words and fragments that should not be damaged by automatic processing: technical terms, commands, paths, links, and names like `PowerShell`, `GitHub`, `USB`.
+* `settings.ini` — user settings.
+* `hotkeys.ini` — user hotkeys.
+* `exclude.txt` — exclusions and canonical spelling.
 
-Some functions can also restore the canonical spelling from `exclude.txt`.
-
-Example:
-
-```text
-pOWERSHELL
-```
-
-becomes:
+`exclude.txt` is useful for technical words, commands, paths, links and names like:
 
 ```text
 PowerShell
+GitHub
+USB
+https://
+C:\
 ```
 
 ---
 
-## Quick start
+## Settings GUI
 
-1. Run `Run_Layout_Toolkit.cmd`.
-2. If AutoHotkey v2 is not installed, the official AutoHotkey website will open.
-3. Install AutoHotkey v2.
-4. Run `Run_Layout_Toolkit.cmd` again.
+The Settings GUI can:
+
+* show current hotkeys;
+* open and reload `hotkeys.ini`;
+* reset hotkeys to defaults;
+* open and reload `exclude.txt`;
+* reset exclusions to defaults;
+* configure live mode;
+* open Unicode Input in clipboard mode.
+
+Open it from the tray menu or by double-clicking the Layout Toolkit tray icon.
 
 ---
 
-## Startup
+## Startup / Автозапуск
 
 Run:
 
@@ -452,48 +214,29 @@ Run:
 Startup_Manager.cmd
 ```
 
-There you can:
-
-* add Layout Toolkit to Windows startup;
-* remove Layout Toolkit from Windows startup.
+It can add or remove Layout Toolkit from Windows startup.
 
 ---
 
-## Requirements
+## Requirements / Требования
 
 * Windows 10 or Windows 11
 * AutoHotkey v2
 
 ---
 
-## Important warning
+## Known limitations / Ограничения
 
-Live mode automatically sends:
-
-```text
-Backspace
-Ctrl + V
-```
-
-So it is best used in:
-
-* messengers;
-* search fields;
-* short input fields;
-* quick notes.
-
-For long documents, books, articles, and serious writing, it is safer to use:
-
-```text
-Win + F11
-Win + F12
-```
+* Live mode is intended mostly for short messages.
+* Some applications may handle synthetic `Backspace` / paste differently.
+* For long documents, selected-text conversion is safer than live mode.
 
 ---
 
-## Known limitations
+## Changelog
 
-* Live mode is intended mostly for short messages.
-* Some applications may handle synthetic Backspace / Ctrl+V differently.
-* Live mode is not recommended for long documents.
-* AutoHotkey v2 is required.
+See:
+
+```text
+CHANGELOG.md
+```
