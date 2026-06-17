@@ -479,7 +479,7 @@ if g_LiveEnabled {
 
 firstRunDone := IniRead(g_ConfigPath, "General", "FirstRunDone", "0")
 if (firstRunDone != "1") {
-    ShowTrainingGui()
+    ShowTrainingGui(true)
 } else {
     Notify("Запущено. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
@@ -588,7 +588,7 @@ SetupTrayMenu() {
 
     A_TrayMenu.Delete()
 
-    A_TrayMenu.Add("Показать обучение", ShowTrainingGui)    
+    A_TrayMenu.Add("Показать обучение", (*) => ShowTrainingGui(false))
     A_TrayMenu.Add("Настройки...", OpenSettingsGui)
     A_TrayMenu.Add("Открыть папку Layout Toolkit", OpenUserDataDir)
     A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
@@ -851,56 +851,78 @@ ShowLiveFirstToggleHint() {
     )
 }
 
-ShowTrainingGui(*) {
-    global g_LiveEnabled, g_ConfigPath, g_AppName
+ShowTrainingGui(isFirstRun := false) {
+    global g_LiveEnabled, g_AppName, g_ConfigDir
+    global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
+    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
 
-    guiObj := Gui("+AlwaysOnTop", g_AppName " — первое обучение")
+    guiObj := Gui("+AlwaysOnTop", g_AppName " — обучение")
     guiObj.SetFont("s10", "Segoe UI")
 
-    guiObj.AddText("w720", "Это один общий AHK-скрипт для ручной и live-конвертации раскладки RU/EN.")
-    guiObj.AddText("w720", "")
-    guiObj.SetFont("s10 bold", "Segoe UI")
-    guiObj.AddText("xm w500", "Словарь исключений:")
-    btnOpenExclude := guiObj.AddButton("x+10 yp-4 w190 h26", "Открыть exclude.txt")
-    btnOpenExclude.OnEvent("Click", OpenExcludeFile)
+    guiObj.SetFont("s12 bold", "Segoe UI")
+    guiObj.AddText("x20 y16 w600 h26", "Layout Toolkit — быстрый ремонт текста")
+
+    guiObj.SetFont("s9 norm", "Segoe UI")
+    guiObj.AddText("x20 y45 w600 h36", "Исправление RU/EN-раскладки, случайного CapsLock и ввод Unicode-символов. Всё основное доступно через хоткеи, трей и настройки.")
     
-    guiObj.SetFont("s10 norm", "Segoe UI")
-    guiObj.AddText("xm y+8 w720", "Файл exclude.txt хранится в папке Documents\Layout Toolkit. Слова и фразы из него не конвертируются: USB, PowerShell, GitHub, C:\Windows, ссылки и т.п.")
-    guiObj.AddText("xm w720", "Файл можно редактировать вручную. После изменения нажмите в трее: Перезагрузить словарь исключений.")
-    guiObj.AddText("xm w720", "")
-    guiObj.AddText("w720", "1) Win + F12 — выделенный кусок целиком в противоположную раскладку.")
-    guiObj.AddText("w720", "   Пример: Ghbdtn/ Rfr ltkf&  →  Привет. Как дела?")
-    guiObj.AddText("w720", "")
-    guiObj.AddText("w720", "2) Win + F11 — смешанный выделенный текст привести к языку большинства.")
-    guiObj.AddText("w720", "   Пример: Ghbdtn/ Я уже дома, сейчас включу компьютер. Rfr дела?")
-    guiObj.AddText("w720", "        → Привет. Я уже дома, сейчас включу компьютер. Как дела?")
-    guiObj.AddText("w720", "")
-    guiObj.AddText("w720", "3) Win + F10 — включить/выключить live-режим.")
-    guiObj.AddText("w720", "   Live-режим: двойной пробел исправляет текущий набранный фрагмент.")
-    guiObj.AddText("w720", "   Пример: Z gbie ntrcn/ + двойной пробел")
-    guiObj.AddText("w720", "        → Я пишу текст.")
-    guiObj.AddText("w720", "")
+	body := ""
+    body .= "1. Layout Fix`r`n"
+    body .= "Исправляет уже набранный выделенный текст.`r`n"
+    body .= "Full: " HotkeyToDisplay(g_HotkeyLayoutFull) " — весь фрагмент в противоположную раскладку.`r`n"
+    body .= "Majority: " HotkeyToDisplay(g_HotkeyLayoutMajority) " — аккуратнее для смешанного текста.`r`n"
+    body .= "`r`n"
 
-    guiObj.SetFont("s10 bold", "Segoe UI")
-    guiObj.AddText("w720", "Предупреждение:")
-    guiObj.SetFont("s10 norm", "Segoe UI")
-    guiObj.AddText("w720", "Live-режим сам нажимает Backspace и Ctrl+V. Для дипломов, книг и длинных документов лучше держать его выключенным и пользоваться Win+F11/F12.")
-    guiObj.AddText("w720", "")
+    body .= "2. Live-режим`r`n"
+    body .= "Переключение: " HotkeyToDisplay(g_HotkeyLiveToggle) ".`r`n"
+    body .= "Исправляет текущий набранный фрагмент по двойному пробелу.`r`n"
+    body .= "Если мешает игре или приложению — выключи хоткеем, через трей или настройки.`r`n"
+    body .= "`r`n"
 
-    chk := guiObj.AddCheckbox("vStartLive w720", "Сразу включить live-режим после закрытия этого окна")
+    body .= "3. Unicode Input`r`n"
+    body .= "Хоткей: " HotkeyToDisplay(g_HotkeyUnicodeInput) ".`r`n"
+    body .= "Ввод Unicode по HEX-коду: 2014 → —.`r`n"
+    body .= "Из настроек это же окно открывается в режиме копирования в буфер.`r`n"
+    body .= "`r`n"
+
+    body .= "4. CapsLock Fix`r`n"
+    body .= "Хоткей: " HotkeyToDisplay(g_HotkeyCapsLockFix) ".`r`n"
+    body .= "Исправляет регистр выделенного текста: пРИВЕТ → Привет.`r`n"
+    body .= "exclude.txt помогает сохранить каноническое написание: PowerShell, GitHub и т.п.`r`n"
+    body .= "`r`n"
+
+    body .= "5. Пользовательские файлы`r`n"
+    body .= g_ConfigDir "`r`n"
+    body .= "settings.ini — настройки.`r`n"
+    body .= "hotkeys.ini — горячие клавиши.`r`n"
+    body .= "exclude.txt — исключения и каноническое написание.`r`n"
+    body .= "`r`n"
+
+    body .= "6. Settings GUI`r`n"
+    body .= "Настройки открывают файлы, перезагружают хоткеи/исключения, сбрасывают их до стандартных и управляют Live-режимом.`r`n"
+    body .= "Быстрый доступ: двойной клик по иконке LT в трее.`r`n"
+    body .= "`r`n"
+
+    body .= "Важно`r`n"
+    body .= "Live-режим сам нажимает Backspace и вставляет исправленный текст. Для длинных документов безопаснее использовать Layout Fix по выделению."
+
+    guiObj.SetFont("s9 norm", "Segoe UI")
+    bodyEdit := guiObj.AddEdit("x20 y90 w600 h300 ReadOnly +Wrap VScroll -Tabstop", body)
+
+    chk := guiObj.AddCheckbox("vStartLive x20 y405 w600 h24", "Сразу включить live-режим после закрытия этого окна")
     chk.Value := g_LiveEnabled ? 1 : 0
 
-    guiObj.AddText("w720", "")
-
-    btnOk := guiObj.AddButton("Default w220", "Понял, больше не показывать")
-    btnCloseOnly := guiObj.AddButton("x+10 w180", "Закрыть только сейчас")
+    btnOk := guiObj.AddButton("Default x20 y445 w210 h32", "Понял, больше не показывать")
+    btnSettings := guiObj.AddButton("x245 y445 w165 h32", "Открыть настройки")
+    btnCloseOnly := guiObj.AddButton("x425 y445 w195 h32", "Закрыть только сейчас")
 
     btnOk.OnEvent("Click", (*) => TrainingGuiOk(guiObj))
-    btnCloseOnly.OnEvent("Click", (*) => TrainingGuiCloseOnlyNow(guiObj))
+    btnSettings.OnEvent("Click", (*) => OpenSettingsGui())
+    btnCloseOnly.OnEvent("Click", (*) => TrainingGuiCloseOnlyNow(guiObj, isFirstRun))
 
-    guiObj.OnEvent("Close", (*) => TrainingGuiCloseOnlyNow(guiObj))
+    guiObj.OnEvent("Close", (*) => TrainingGuiCloseOnlyNow(guiObj, isFirstRun))
 
-    guiObj.Show()
+    guiObj.Show("w640 h500")
+    btnOk.Focus()
 }
 
 
@@ -919,10 +941,13 @@ TrainingGuiOk(guiObj) {
     Notify("Готово. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
 
-TrainingGuiCloseOnlyNow(guiObj) {
+TrainingGuiCloseOnlyNow(guiObj, isFirstRun := false) {
     global g_ConfigPath
 
-    IniWrite("0", g_ConfigPath, "General", "FirstRunDone")
+    if isFirstRun {
+        IniWrite("0", g_ConfigPath, "General", "FirstRunDone")
+    }
+
     guiObj.Destroy()
 }
 
