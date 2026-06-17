@@ -4,6 +4,7 @@
 
 #Include Modules\UnicodeInput.ahk
 #Include Modules\CapsLockFix.ahk
+#Include Modules\SettingsGui.ahk
 
 ; ============================================================
 ; Layout Toolkit RU/EN
@@ -44,6 +45,7 @@ global g_DefaultHotkeysPath := g_AssetsDir "\hotkeys.default.ini"
 global g_ConfigDir := A_MyDocuments "\Layout Toolkit"
 global g_ConfigPath := g_ConfigDir "\settings.ini"
 global g_ExcludePath := g_ConfigDir "\exclude.txt"
+global g_HotkeysPath := g_ConfigDir "\hotkeys.ini"
 
 ; Старые пути нужны только для мягкой миграции.
 global g_LegacyConfigDir := A_AppData "\LayoutToolkit"
@@ -52,10 +54,25 @@ global g_LegacyExcludePath := A_ScriptDir "\exclude.txt"
 
 global g_ExcludeWords := Map()
 
+; Все хоткеи из Documents\Layout Toolkit\hotkeys.ini.
+; Заводские функции используют известные ключи,
+; пользовательские модули могут читать свои ключи через GetHotkey().
+global g_Hotkeys := Map()
+
+global g_HotkeyLayoutFull := "#F12"
+global g_HotkeyLayoutMajority := "#F11"
+global g_HotkeyLiveToggle := "#F10"
+global g_HotkeyUnicodeInput := "^+u"
+global g_HotkeyCapsLockFix := "#+F12"
+
+global g_RegisteredHotkeys := []
+
 EnsureUserDataDir()
 MigrateUserData()
 EnsureExcludeFile()
 LoadExcludeWords()
+EnsureHotkeysFile()
+LoadHotkeys()
 
 global g_ShowTrayTips := IniRead(g_ConfigPath, "Notifications", "ShowTrayTips", "1") = "1"
 global g_PlaySound := IniRead(g_ConfigPath, "Notifications", "PlaySound", "0") = "1"
@@ -126,6 +143,11 @@ EnsureExcludeFile() {
     }
 
     ; Fallback, если Assets потеряли или запуск идёт из странной сборки.
+    FileAppend(GetDefaultExcludeText(), g_ExcludePath, "UTF-8")
+}
+
+
+GetDefaultExcludeText() {
     defaultText := ""
     defaultText .= "USB`n"
     defaultText .= "AHK`n"
@@ -143,7 +165,134 @@ EnsureExcludeFile() {
     defaultText .= ".com`n"
     defaultText .= ".ru`n"
 
-    FileAppend(defaultText, g_ExcludePath, "UTF-8")
+    return defaultText
+}
+
+
+EnsureHotkeysFile() {
+    global g_HotkeysPath, g_DefaultHotkeysPath
+
+    if FileExist(g_HotkeysPath) {
+        return
+    }
+
+    ; Новый нормальный путь:
+    ; Assets\hotkeys.default.ini -> Documents\Layout Toolkit\hotkeys.ini
+    if FileExist(g_DefaultHotkeysPath) {
+        try {
+            FileCopy(g_DefaultHotkeysPath, g_HotkeysPath, false)
+            return
+        }
+    }
+
+    ; Fallback, если Assets потеряли или запуск идёт из странной сборки.
+    FileAppend(GetDefaultHotkeysText(), g_HotkeysPath, "UTF-8")
+}
+
+
+GetDefaultHotkeysText() {
+    defaultText := ""
+    defaultText .= "[Hotkeys]`n"
+    defaultText .= "LayoutFull=#F12`n"
+    defaultText .= "LayoutMajority=#F11`n"
+    defaultText .= "LiveToggle=#F10`n"
+    defaultText .= "UnicodeInput=^+u`n"
+    defaultText .= "CapsLockFix=#+F12`n"
+
+    return defaultText
+}
+
+
+LoadHotkeys(*) {
+    global g_HotkeysPath, g_Hotkeys
+    global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
+    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+
+    EnsureHotkeysFile()
+
+    parsedHotkeys := Map()
+
+    try {
+        content := FileRead(g_HotkeysPath, "UTF-8")
+    } catch {
+        g_Hotkeys := parsedHotkeys
+        return
+    }
+
+    inHotkeysSection := false
+
+    for line in StrSplit(content, "`n", "`r") {
+        line := Trim(line)
+
+        ; На случай UTF-8-BOM в начале файла.
+        line := StrReplace(line, Chr(0xFEFF), "")
+
+        if (line = "") {
+            continue
+        }
+
+        ; Комментарии.
+        ; Строки вида LayoutFull=#F12 сюда не попадут,
+        ; потому что начинаются не с #, а с имени ключа.
+        if (SubStr(line, 1, 1) = ";") {
+            continue
+        }
+
+        if (SubStr(line, 1, 1) = "#") {
+            continue
+        }
+
+        if (SubStr(line, 1, 1) = "[" && SubStr(line, -1) = "]") {
+            sectionName := SubStr(line, 2, StrLen(line) - 2)
+            inHotkeysSection := sectionName = "Hotkeys"
+            continue
+        }
+
+        if !inHotkeysSection {
+            continue
+        }
+
+        eqPos := InStr(line, "=")
+
+        if (eqPos <= 1) {
+            continue
+        }
+
+        key := Trim(SubStr(line, 1, eqPos - 1))
+        value := Trim(SubStr(line, eqPos + 1))
+
+        if (key = "" || value = "") {
+            continue
+        }
+
+        parsedHotkeys[key] := value
+    }
+
+    ; Сохраняем ВСЕ ключи из [Hotkeys], включая пользовательские.
+    g_Hotkeys := parsedHotkeys
+
+    ; Заводские хоткеи LT.
+    g_HotkeyLayoutFull := GetHotkey("LayoutFull", "#F12")
+    g_HotkeyLayoutMajority := GetHotkey("LayoutMajority", "#F11")
+    g_HotkeyLiveToggle := GetHotkey("LiveToggle", "#F10")
+    g_HotkeyUnicodeInput := GetHotkey("UnicodeInput", "^+u")
+    g_HotkeyCapsLockFix := GetHotkey("CapsLockFix", "#+F12")
+}
+
+GetHotkey(actionName, defaultValue := "") {
+    global g_Hotkeys
+
+    actionName := Trim(actionName)
+
+    if (actionName = "") {
+        return defaultValue
+    }
+
+    if g_Hotkeys.Has(actionName) {
+        return g_Hotkeys[actionName]
+    }
+
+    return defaultValue
 }
 
 
@@ -331,6 +480,10 @@ if (firstRunDone != "1") {
     Notify("Запущено. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
 
+; Горячие клавиши читаются из Documents\Layout Toolkit\hotkeys.ini.
+; Важно: RegisterHotkeys() должен быть ДО первых статических hotkey-строк.
+RegisterHotkeys()
+
 ; Сброс буфера при клике мышью.
 ~LButton::ResetTypingBuffer()
 ~RButton::ResetTypingBuffer()
@@ -341,22 +494,98 @@ if (firstRunDone != "1") {
 $Space::LiveSpacePressed()
 #HotIf
 
-; Горячие клавиши.
-#F12::ConvertSelectedFullHotkey()
-#F11::ConvertSelectedMajorityHotkey()
-#F10::ToggleLiveMode()
+RegisterHotkeys() {
+    global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
+    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+    global g_RegisteredHotkeys
 
-; Temporary hotkey until configurable hotkeys GUI is implemented.
-^+u::UnicodeInput()
-#+F12::CapsLockFixSelectedHotkey()
+    ; Если потом будем перезагружать хоткеи без полного рестарта,
+    ; сначала отключаем ранее зарегистрированные.
+    for _, hotkeyName in g_RegisteredHotkeys {
+        try {
+            Hotkey(hotkeyName, "Off")
+        }
+    }
 
+    g_RegisteredHotkeys := []
+
+    RegisterOneHotkey(g_HotkeyLayoutFull, (*) => ConvertSelectedFullHotkey(), "Layout full fix")
+    RegisterOneHotkey(g_HotkeyLayoutMajority, (*) => ConvertSelectedMajorityHotkey(), "Layout majority fix")
+    RegisterOneHotkey(g_HotkeyLiveToggle, (*) => ToggleLiveMode(), "Live toggle")
+    RegisterOneHotkey(g_HotkeyUnicodeInput, (*) => UnicodeInput(), "Unicode Input")
+    RegisterOneHotkey(g_HotkeyCapsLockFix, (*) => CapsLockFixSelectedHotkey(), "CapsLock Fix")
+}
+
+
+RegisterOneHotkey(hotkeyName, action, displayName := "") {
+    global g_RegisteredHotkeys, g_AppName
+
+    hotkeyName := Trim(hotkeyName)
+
+    if (hotkeyName = "") {
+        return
+    }
+
+    try {
+        Hotkey(hotkeyName, action, "On")
+        g_RegisteredHotkeys.Push(hotkeyName)
+    } catch as err {
+        if (displayName = "") {
+            displayName := hotkeyName
+        }
+
+        Notify("Не удалось зарегистрировать хоткей " displayName ": " hotkeyName "`n" err.Message, g_AppName, "Iconx")
+    }
+}
+
+
+HotkeyToDisplay(hotkeyName) {
+    hotkeyName := Trim(hotkeyName)
+
+    if (hotkeyName = "") {
+        return "не задан"
+    }
+
+    result := ""
+
+    if InStr(hotkeyName, "#") {
+        result .= "Win+"
+    }
+
+    if InStr(hotkeyName, "^") {
+        result .= "Ctrl+"
+    }
+
+    if InStr(hotkeyName, "+") {
+        result .= "Shift+"
+    }
+
+    if InStr(hotkeyName, "!") {
+        result .= "Alt+"
+    }
+
+    key := hotkeyName
+    key := StrReplace(key, "#", "")
+    key := StrReplace(key, "^", "")
+    key := StrReplace(key, "+", "")
+    key := StrReplace(key, "!", "")
+
+    ; Красиво выводим одиночные буквы.
+    if (StrLen(key) = 1) {
+        key := StrUpper(key)
+    }
+
+    return result key
+}
 
 SetupTrayMenu() {
     global g_AppName, g_ShowTrayTips, g_PlaySound, g_LiveEnabled
+    global g_HotkeyLiveToggle
 
     A_TrayMenu.Delete()
 
     A_TrayMenu.Add("Показать обучение", ShowTrainingGui)
+	A_TrayMenu.Add("Настройки...", OpenSettingsGui)
     A_TrayMenu.Add("Открыть папку Layout Toolkit", OpenUserDataDir)
     A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
     A_TrayMenu.Add("Перезагрузить словарь исключений", ReloadExcludeWords)
@@ -378,12 +607,14 @@ SetupTrayMenu() {
     }
 
     A_TrayMenu.Add()
-    A_TrayMenu.Add("Live-режим  Win+F10", ToggleLiveMode)
-
+    
+	liveLabel := "Live-режим  " HotkeyToDisplay(g_HotkeyLiveToggle)
+    A_TrayMenu.Add(liveLabel, ToggleLiveMode)
+    
     if g_LiveEnabled {
-        A_TrayMenu.Check("Live-режим  Win+F10")
+        A_TrayMenu.Check(liveLabel)
     } else {
-        A_TrayMenu.Uncheck("Live-режим  Win+F10")
+        A_TrayMenu.Uncheck(liveLabel)
     }
 
     A_TrayMenu.Add()
@@ -443,6 +674,99 @@ ReloadExcludeWords(*) {
     Notify("Словарь исключений перезагружен. Записей: " g_ExcludeWords.Count, g_AppName, "Iconi")
 }
 
+RestoreDefaultExcludeWords(*) {
+    global g_AppName, g_ExcludePath, g_DefaultExcludePath, g_ExcludeWords
+
+    result := MsgBox(
+        "Сбросить словарь исключений до стандартного?`n`nТекущий exclude.txt будет перезаписан.",
+        g_AppName,
+        "YesNo Icon?"
+    )
+
+    if (result != "Yes") {
+        return
+    }
+
+    try {
+        EnsureUserDataDir()
+
+        if FileExist(g_DefaultExcludePath) {
+            FileCopy(g_DefaultExcludePath, g_ExcludePath, true)
+        } else {
+            if FileExist(g_ExcludePath) {
+                FileDelete(g_ExcludePath)
+            }
+
+            FileAppend(GetDefaultExcludeText(), g_ExcludePath, "UTF-8")
+        }
+
+        LoadExcludeWords()
+
+        Notify("Словарь исключений сброшен до стандартного. Записей: " g_ExcludeWords.Count, g_AppName, "Iconi")
+    } catch as err {
+        Notify("Не удалось сбросить словарь исключений: " err.Message, g_AppName, "Iconx")
+    }
+}
+
+OpenHotkeysFile(*) {
+    global g_HotkeysPath, g_AppName
+
+    EnsureHotkeysFile()
+
+    try {
+        Run('notepad.exe "' g_HotkeysPath '"')
+    } catch as err {
+        Notify("Не удалось открыть hotkeys.ini: " err.Message, g_AppName, "Iconx")
+    }
+}
+
+
+ReloadHotkeys(*) {
+    global g_AppName, g_Hotkeys
+
+    LoadHotkeys()
+    RegisterHotkeys()
+    SetupTrayMenu()
+
+    Notify("Горячие клавиши перезагружены. Записей: " g_Hotkeys.Count, g_AppName, "Iconi")
+}
+
+
+RestoreDefaultHotkeys(*) {
+    global g_AppName, g_HotkeysPath, g_DefaultHotkeysPath
+
+    result := MsgBox(
+        "Сбросить горячие клавиши до стандартных?`n`nТекущий hotkeys.ini будет перезаписан.",
+        g_AppName,
+        "YesNo Icon?"
+    )
+
+    if (result != "Yes") {
+        return
+    }
+
+    try {
+        EnsureUserDataDir()
+
+        if FileExist(g_DefaultHotkeysPath) {
+            FileCopy(g_DefaultHotkeysPath, g_HotkeysPath, true)
+        } else {
+            if FileExist(g_HotkeysPath) {
+                FileDelete(g_HotkeysPath)
+            }
+
+            FileAppend(GetDefaultHotkeysText(), g_HotkeysPath, "UTF-8")
+        }
+
+        LoadHotkeys()
+        RegisterHotkeys()
+        SetupTrayMenu()
+
+        Notify("Горячие клавиши сброшены до стандартных.", g_AppName, "Iconi")
+    } catch as err {
+        Notify("Не удалось сбросить горячие клавиши: " err.Message, g_AppName, "Iconx")
+    }
+}
 
 ToggleTrayTips(*) {
     global g_ShowTrayTips, g_ConfigPath, g_AppName
