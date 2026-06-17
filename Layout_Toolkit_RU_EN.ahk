@@ -584,8 +584,8 @@ SetupTrayMenu() {
 
     A_TrayMenu.Delete()
 
-    A_TrayMenu.Add("Показать обучение", ShowTrainingGui)
-	A_TrayMenu.Add("Настройки...", OpenSettingsGui)
+    A_TrayMenu.Add("Показать обучение", ShowTrainingGui)    
+    A_TrayMenu.Add("Настройки...", OpenSettingsGui)
     A_TrayMenu.Add("Открыть папку Layout Toolkit", OpenUserDataDir)
     A_TrayMenu.Add("Открыть exclude.txt", OpenExcludeFile)
     A_TrayMenu.Add("Перезагрузить словарь исключений", ReloadExcludeWords)
@@ -619,6 +619,11 @@ SetupTrayMenu() {
 
     A_TrayMenu.Add()
     A_TrayMenu.Add("Выход", (*) => ExitApp())
+
+    ; Двойной клик по иконке в трее открывает настройки.
+    ; Правый клик по-прежнему показывает обычное меню.
+    A_TrayMenu.Default := "Настройки..."
+    A_TrayMenu.ClickCount := 2
 
     A_IconTip := g_AppName
 }
