@@ -82,6 +82,10 @@ if FileExist(g_IconPath) {
 }
 
 global g_LiveEnabled := IniRead(g_ConfigPath, "General", "LiveEnabled", "0") = "1"
+global g_DoubleSpaceMs := ReadLiveDoubleSpaceMs()
+global g_ShowFirstToggleHint := IniRead(g_ConfigPath, "General", "ShowFirstToggleHint", "1") = "1"
+global g_FirstToggleHintShown := IniRead(g_ConfigPath, "General", "FirstToggleHintShown", "0") = "1"
+
 global g_Suppress := false
 global g_LiveBusy := false
 global g_LivePendingRequest := false
@@ -90,7 +94,7 @@ global g_LivePendingLastSpaceTick := 0
 global g_Buffer := ""
 global g_Direction := ""          ; "EN_TO_RU" или "RU_TO_EN"
 global g_LastSpaceTick := 0
-global g_DoubleSpaceMs := 700
+
 global g_MaxBufferChars := 300
 global g_PendingBoundary := false
 global g_AfterBoundarySpace := false
@@ -798,6 +802,55 @@ ToggleNotificationSound(*) {
     Notify(g_PlaySound ? "Звук уведомлений включён" : "Звук уведомлений выключен", g_AppName, "Iconi", g_PlaySound)
 }
 
+NormalizeLiveDoubleSpaceMs(value, fallback := 700) {
+    value := Trim(value)
+
+    if !RegExMatch(value, "^\d+$") {
+        return fallback
+    }
+
+    ms := Integer(value)
+
+    if (ms < 100 || ms > 3000) {
+        return fallback
+    }
+
+    return ms
+}
+
+
+ReadLiveDoubleSpaceMs() {
+    global g_ConfigPath
+
+    value := IniRead(g_ConfigPath, "General", "DoubleSpaceMs", "700")
+    return NormalizeLiveDoubleSpaceMs(value, 700)
+}
+
+
+ShowLiveFirstToggleHint() {
+    global g_AppName, g_ConfigPath
+    global g_ShowFirstToggleHint, g_FirstToggleHintShown
+
+    if (!g_ShowFirstToggleHint || g_FirstToggleHintShown) {
+        return
+    }
+
+    g_FirstToggleHintShown := true
+    IniWrite("1", g_ConfigPath, "General", "FirstToggleHintShown")
+
+    MsgBox(
+        "Live-режим включён.`n`n"
+        . "Он исправляет текущий набранный фрагмент по двойному пробелу.`n`n"
+        . "Важно:`n"
+        . "- второй пробел не отправляется в приложение;`n"
+        . "- LT сам нажимает Backspace и вставляет исправленный текст;`n"
+        . "- если режим мешает игре или приложению, выключи его хоткеем или через трей.`n`n"
+        . "Эту подсказку можно отключить в настройках.",
+        g_AppName " — Live-режим",
+        "Iconi"
+    )
+}
+
 ShowTrainingGui(*) {
     global g_LiveEnabled, g_ConfigPath, g_AppName
 
@@ -856,14 +909,13 @@ TrainingGuiOk(guiObj) {
 
     data := guiObj.Submit(false)
 
-    g_LiveEnabled := data.StartLive = 1
+    desiredLive := data.StartLive = 1
 
     IniWrite("1", g_ConfigPath, "General", "FirstRunDone")
-    IniWrite(g_LiveEnabled ? "1" : "0", g_ConfigPath, "General", "LiveEnabled")
+    SetLiveMode(desiredLive, false, false)
 
     guiObj.Destroy()
 
-    ResetTypingBuffer()
     Notify("Готово. Live: " (g_LiveEnabled ? "включён" : "выключен"), g_AppName, "Iconi")
 }
 
@@ -874,32 +926,52 @@ TrainingGuiCloseOnlyNow(guiObj) {
     guiObj.Destroy()
 }
 
-ToggleLiveMode(*) {
+SetLiveMode(enabled, showNotify := true, showFirstHint := true) {
     global g_LiveEnabled, g_ConfigPath, g_AppName, ih
 
-    g_LiveEnabled := !g_LiveEnabled
+    enabled := enabled ? true : false
+    stateChanged := g_LiveEnabled != enabled
+
+    g_LiveEnabled := enabled
     IniWrite(g_LiveEnabled ? "1" : "0", g_ConfigPath, "General", "LiveEnabled")
 
     ResetTypingBuffer()
 
-    try {
-        if g_LiveEnabled {
-            ih.Start()
-        } else {
-            ih.Stop()
+    if stateChanged {
+        try {
+            if g_LiveEnabled {
+                ih.Start()
+            } else {
+                ih.Stop()
+            }
+        } catch as err {
+            Notify("Ошибка переключения live-хука: " err.Message, g_AppName, "Icon!")
+            return false
         }
-    } catch as err {
-        Notify("Ошибка переключения live-хука: " err.Message, g_AppName, "Icon!")
-        return
+
+        SetupTrayMenu()
     }
 
-    SetupTrayMenu()
+    if (g_LiveEnabled && stateChanged && showFirstHint) {
+        ShowLiveFirstToggleHint()
+    }
 
-    Notify(
-        g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен",
-        g_AppName,
-        g_LiveEnabled ? "Iconi" : "Icon!"
-    )
+    if showNotify {
+        Notify(
+            g_LiveEnabled ? "Live-конвертер включён" : "Live-конвертер выключен",
+            g_AppName,
+            g_LiveEnabled ? "Iconi" : "Icon!"
+        )
+    }
+
+    return true
+}
+
+
+ToggleLiveMode(*) {
+    global g_LiveEnabled
+
+    SetLiveMode(!g_LiveEnabled, true, true)
 }
 
 

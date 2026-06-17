@@ -18,14 +18,18 @@ g_SettingsActionBtn1 := ""
 g_SettingsActionBtn2 := ""
 g_SettingsActionBtn3 := ""
 
-g_SettingsAction1 := ""
-g_SettingsAction2 := ""
-g_SettingsAction3 := ""
+g_SettingsLiveEnabledChk := ""
+g_SettingsLiveDoubleSpaceLabel := ""
+g_SettingsLiveDoubleSpaceEdit := ""
+g_SettingsLiveDoubleSpaceHint := ""
+g_SettingsLiveHintChk := ""
 
 
 OpenSettingsGui(*) {
     global g_SettingsGui, g_SettingsContentTitle, g_SettingsContentBody
     global g_SettingsActionBtn1, g_SettingsActionBtn2, g_SettingsActionBtn3
+    global g_SettingsLiveEnabledChk, g_SettingsLiveDoubleSpaceLabel, g_SettingsLiveDoubleSpaceEdit
+    global g_SettingsLiveDoubleSpaceHint, g_SettingsLiveHintChk
     global g_AppName
 
     if IsObject(g_SettingsGui) {
@@ -76,6 +80,12 @@ OpenSettingsGui(*) {
 
     g_SettingsContentBody := g_SettingsGui.AddEdit("x180 y48 w560 h325 ReadOnly +Wrap VScroll", "")
     g_SettingsContentBody.SetFont("s9", "Consolas")
+
+    g_SettingsLiveEnabledChk := g_SettingsGui.AddCheckbox("x180 y285 w520 h24 Hidden", "Включить live-режим")
+    g_SettingsLiveDoubleSpaceLabel := g_SettingsGui.AddText("x180 y318 w150 h23 Hidden", "DoubleSpaceMs:")
+    g_SettingsLiveDoubleSpaceEdit := g_SettingsGui.AddEdit("x335 y314 w90 h24 Number Hidden", "")
+    g_SettingsLiveDoubleSpaceHint := g_SettingsGui.AddText("x435 y318 w250 h23 Hidden", "100–3000 мс")
+    g_SettingsLiveHintChk := g_SettingsGui.AddCheckbox("x180 y350 w520 h24 Hidden", "Показать расширенную подсказку при первом включении Live-режима")
 
     g_SettingsActionBtn1 := g_SettingsGui.AddButton("x180 y390 w165 h30 Hidden", "")
     g_SettingsActionBtn1.OnEvent("Click", SettingsGui_ActionButton1)
@@ -149,6 +159,13 @@ SettingsGui_ShowPage(pageName, *) {
 
     g_SettingsContentTitle.Text := title
     g_SettingsContentBody.Value := body
+
+    SettingsGui_ApplyPageLayout(pageName)
+    SettingsGui_SetLiveControlsVisible(pageName = "Live")
+
+    if (pageName = "Live") {
+        SettingsGui_UpdateLiveControls()
+    }
     
     switch pageName {
         case "General":
@@ -156,6 +173,11 @@ SettingsGui_ShowPage(pageName, *) {
                 "Открыть папку данных", "OpenDataDir",
                 "Перезапустить LT", "RestartToolkit",
                 "Сменить язык", "ChangeLanguage"
+            )
+			
+        case "Live":
+            SettingsGui_SetActions(
+                "Сохранить", "SaveLiveSettings"
             )
 
         case "Hotkeys":
@@ -242,22 +264,109 @@ SettingsGui_GetLayoutFixText() {
 
 SettingsGui_GetLiveText() {
     global g_LiveEnabled, g_HotkeyLiveToggle
+    global g_DoubleSpaceMs, g_ShowFirstToggleHint, g_FirstToggleHintShown
 
     text := ""
     text .= "Live-режим сейчас: " SettingsGui_OnOff(g_LiveEnabled) "`r`n"
     text .= "Хоткей переключения: " HotkeyToDisplay(g_HotkeyLiveToggle) "`r`n"
     text .= "`r`n"
-    text .= "Планируемые настройки:`r`n"
-    text .= "[ ] Включить live-режим`r`n"
-    text .= "DoubleSpaceMs = 700`r`n"
-    text .= "[ ] Показывать расширенную подсказку при первом включении`r`n"
+    text .= "Live исправляет текущий набранный фрагмент по двойному пробелу.`r`n"
+    text .= "Первый пробел остаётся обычным вводом, второй запускает исправление.`r`n"
+    text .= "`r`n"
+    text .= "Текущие параметры:`r`n"
+    text .= "DoubleSpaceMs = " g_DoubleSpaceMs "`r`n"
+    text .= "Расширенная подсказка: " SettingsGui_OnOff(g_ShowFirstToggleHint) "`r`n"
     text .= "`r`n"
     text .= "Важно:`r`n"
-    text .= "Live-режим должен быть легко выключаемым, потому что может мешать играм и отдельным приложениям.`r`n"
+    text .= "Live-режим может мешать играм и отдельным приложениям, поэтому он должен легко выключаться.`r`n"
+    text .= "Для длинных документов безопаснее использовать Layout Fix по выделению.`r`n"
 
     return text
 }
 
+SettingsGui_ApplyPageLayout(pageName) {
+    global g_SettingsContentBody
+
+    if !IsObject(g_SettingsContentBody) {
+        return
+    }
+
+    if (pageName = "Live") {
+        g_SettingsContentBody.Move(180, 48, 560, 225)
+    } else {
+        g_SettingsContentBody.Move(180, 48, 560, 325)
+    }
+}
+
+SettingsGui_SetLiveControlsVisible(visible) {
+    global g_SettingsLiveEnabledChk, g_SettingsLiveDoubleSpaceLabel, g_SettingsLiveDoubleSpaceEdit
+    global g_SettingsLiveDoubleSpaceHint, g_SettingsLiveHintChk
+
+    controls := [
+        g_SettingsLiveEnabledChk,
+        g_SettingsLiveDoubleSpaceLabel,
+        g_SettingsLiveDoubleSpaceEdit,
+        g_SettingsLiveDoubleSpaceHint,
+        g_SettingsLiveHintChk
+    ]
+
+    for _, ctrl in controls {
+        if IsObject(ctrl) {
+            ctrl.Visible := visible
+        }
+    }
+}
+
+
+SettingsGui_UpdateLiveControls() {
+    global g_SettingsLiveEnabledChk, g_SettingsLiveDoubleSpaceEdit, g_SettingsLiveHintChk
+    global g_LiveEnabled, g_DoubleSpaceMs, g_ShowFirstToggleHint
+
+    if IsObject(g_SettingsLiveEnabledChk) {
+        g_SettingsLiveEnabledChk.Value := g_LiveEnabled ? 1 : 0
+    }
+
+    if IsObject(g_SettingsLiveDoubleSpaceEdit) {
+        g_SettingsLiveDoubleSpaceEdit.Value := g_DoubleSpaceMs
+    }
+
+    if IsObject(g_SettingsLiveHintChk) {
+        g_SettingsLiveHintChk.Value := g_ShowFirstToggleHint ? 1 : 0
+    }
+}
+
+
+SettingsGui_SaveLiveSettings() {
+    global g_SettingsLiveEnabledChk, g_SettingsLiveDoubleSpaceEdit, g_SettingsLiveHintChk
+    global g_ConfigPath, g_DoubleSpaceMs, g_ShowFirstToggleHint, g_AppName
+
+    if (!IsObject(g_SettingsLiveEnabledChk) || !IsObject(g_SettingsLiveDoubleSpaceEdit) || !IsObject(g_SettingsLiveHintChk)) {
+        return
+    }
+
+    rawDoubleSpaceMs := Trim(g_SettingsLiveDoubleSpaceEdit.Value)
+    newDoubleSpaceMs := NormalizeLiveDoubleSpaceMs(rawDoubleSpaceMs, "")
+
+    if (newDoubleSpaceMs = "") {
+        Notify("DoubleSpaceMs должен быть числом от 100 до 3000 мс", g_AppName, "Icon!")
+        g_SettingsLiveDoubleSpaceEdit.Value := g_DoubleSpaceMs
+        return
+    }
+
+    g_DoubleSpaceMs := newDoubleSpaceMs
+    g_ShowFirstToggleHint := g_SettingsLiveHintChk.Value = 1
+
+    IniWrite(String(g_DoubleSpaceMs), g_ConfigPath, "General", "DoubleSpaceMs")
+    IniWrite(g_ShowFirstToggleHint ? "1" : "0", g_ConfigPath, "General", "ShowFirstToggleHint")
+
+    if !SetLiveMode(g_SettingsLiveEnabledChk.Value = 1, false, true) {
+        SettingsGui_UpdateLiveControls()
+        return
+    }
+
+    SettingsGui_ShowPage("Live")
+    Notify("Live-настройки сохранены", g_AppName, "Iconi")
+}
 
 SettingsGui_GetHotkeysText() {
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
@@ -510,6 +619,9 @@ SettingsGui_RunAction(actionName) {
         case "ChangeLanguage":
             SettingsGui_ShowLanguagePlaceholder()
 			
+        case "SaveLiveSettings":
+            SettingsGui_SaveLiveSettings()
+			
         case "OpenUnicodeInputClipboard":
             UnicodeInput("clipboard")
 
@@ -576,6 +688,9 @@ SettingsGui_OnOff(value) {
     return value ? "включён" : "выключен"
 }
 
+SettingsGui_YesNo(value) {
+    return value ? "да" : "нет"
+}
 
 SettingsGui_Close(*) {
     global g_SettingsGui
