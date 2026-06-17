@@ -355,20 +355,6 @@ SettingsGui_GetCapsLockText() {
 
 
 SettingsGui_GetExclusionsText() {
-    global g_ExcludePath, g_DefaultExcludePath
-
-    text := ""
-    text .= "Рабочий файл исключений:`r`n"
-    text .= g_ExcludePath "`r`n"
-    text .= "`r`n"
-    text .= "Стандартный словарь:`r`n"
-    text .= g_DefaultExcludePath "`r`n"
-    text .= "`r`n"
-    text .= "Логика:`r`n"
-    text .= "Documents\Layout Toolkit\exclude.txt — пользовательский живой словарь.`r`n"
-    text .= "Assets\exclude.default.txt — заводской словарь для восстановления.`r`n"
-    text .= "`r`n"
-SettingsGui_GetExclusionsText() {
     global g_ExcludePath, g_DefaultExcludePath, g_ExcludeWords
 
     text := ""
@@ -394,9 +380,6 @@ SettingsGui_GetExclusionsText() {
     text .= "`r`n"
     text .= "После ручного изменения exclude.txt нажми кнопку “Перезагрузить”.`r`n"
     text .= "Кнопка “Сбросить стандартные” перезаписывает пользовательский exclude.txt заводским словарём.`r`n"
-
-    return text
-}
 
     return text
 }
