@@ -9,8 +9,8 @@
 ;
 ; Примеры:
 ;   пРИВЕТ -> Привет
-;   ОНО НЕ ДОЛЖНО БАГОВАТЬ -> Оно не должно баговать
-;   yABAI SUKA БЛЯТЬ -> Yabai suka блять
+;   эТО пРИМЕР -> Это пример
+;   тАК. пРИМЕР -> Так. Пример
 ;   GitHUB -> GitHub
 ;   POWERSHELL -> PowerShell
 
@@ -185,7 +185,7 @@ CapsFix_ShouldFixCore(core) {
     }
 
     ; Полный капс:
-    ; YABAI / SUKA / ПРИВЕТ / БЛЯТЬ
+    ; YABAI / TEST / ПРИВЕТ / ПРИМЕР
     if (upperCount > 0 && lowerCount = 0) {
         return true
     }
