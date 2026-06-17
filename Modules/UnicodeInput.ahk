@@ -7,21 +7,26 @@
 ;   006020140060   -> `—`
 ;   0060 0020 2014 0020 0060 -> ` — `
 
-UnicodeInput() {
+UnicodeInput(mode := "insert") {
+    mode := StrLower(Trim(mode))
+
+    if (mode != "clipboard") {
+        mode := "insert"
+    }
+
+    actionText := (mode = "clipboard")
+        ? "Будет скопировано в буфер обмена."
+        : "Будет вставлено в активное окно."
+
+    title := (mode = "clipboard")
+        ? "Unicode Input — буфер обмена"
+        : "Unicode Input — вставка"
+
     ib := InputBox(
-        "Введи Unicode-код в HEX:`n`n"
-        . "Примеры:`n"
-        . "2013 = –`n"
-        . "2014 = —`n"
-        . "2212 = −`n"
-        . "00B0 = °`n"
-        . "03A9 = Ω`n`n"
-        . "Можно несколько кодов:`n"
-        . "0060 2014 0060 = `—``n"
-        . "006020140060 = `—``n"
-        . "0020 = пробел",
-        "Unicode input",
-        "w390 h300"
+        "Введите Unicode-код в HEX:`n"
+        . actionText,
+        title,
+        "w340 h130"
     )
 
     if (ib.Result != "OK") {
@@ -41,7 +46,43 @@ UnicodeInput() {
         return
     }
 
+    UnicodeInput_ApplyResult(text, mode)
+}
+
+
+UnicodeInput_ApplyResult(text, mode) {
+    if (mode = "clipboard") {
+        UnicodeInput_CopyToClipboard(text)
+        return
+    }
+
     SendText(text)
+}
+
+
+UnicodeInput_CopyToClipboard(text) {
+    global g_AppName
+
+    oldClipboard := ClipboardAll()
+
+    try {
+        A_Clipboard := ""
+        A_Clipboard := text
+
+        if !ClipWait(0.5) {
+            A_Clipboard := oldClipboard
+            Notify("Буфер не успел обновиться. Исходный буфер обмена восстановлен", g_AppName " Unicode Input", "Icon!")
+            return
+        }
+
+        Notify("Скопировано в буфер обмена", g_AppName " Unicode Input", "Iconi")
+    } catch as err {
+        try {
+            A_Clipboard := oldClipboard
+        }
+
+        Notify("Ошибка копирования: " err.Message, g_AppName " Unicode Input", "Iconx")
+    }
 }
 
 

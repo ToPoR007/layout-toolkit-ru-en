@@ -512,7 +512,7 @@ RegisterHotkeys() {
     RegisterOneHotkey(g_HotkeyLayoutFull, (*) => ConvertSelectedFullHotkey(), "Layout full fix")
     RegisterOneHotkey(g_HotkeyLayoutMajority, (*) => ConvertSelectedMajorityHotkey(), "Layout majority fix")
     RegisterOneHotkey(g_HotkeyLiveToggle, (*) => ToggleLiveMode(), "Live toggle")
-    RegisterOneHotkey(g_HotkeyUnicodeInput, (*) => UnicodeInput(), "Unicode Input")
+    RegisterOneHotkey(g_HotkeyUnicodeInput, (*) => UnicodeInput("insert"), "Unicode Input")
     RegisterOneHotkey(g_HotkeyCapsLockFix, (*) => CapsLockFixSelectedHotkey(), "CapsLock Fix")
 }
 

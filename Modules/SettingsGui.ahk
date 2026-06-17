@@ -164,6 +164,11 @@ SettingsGui_ShowPage(pageName, *) {
                 "Перезагрузить хоткеи", "ReloadHotkeys",
                 "Сбросить стандартные", "RestoreDefaultHotkeys"
             )
+			
+        case "Unicode":
+            SettingsGui_SetActions(
+                "Открыть для копирования", "OpenUnicodeInputClipboard"
+            )
 
         case "Exclusions":
             SettingsGui_SetActions(
@@ -318,15 +323,18 @@ SettingsGui_GetUnicodeText() {
     text := ""
     text .= "Unicode Input:`r`n"
     text .= "`r`n"
-    text .= HotkeyToDisplay(g_HotkeyUnicodeInput) " — открыть ввод Unicode и вставить результат в активное окно.`r`n"
+    text .= "Хоткей: " HotkeyToDisplay(g_HotkeyUnicodeInput) "`r`n"
+    text .= "Открывает Unicode Input и вставляет результат в активное окно.`r`n"
     text .= "`r`n"
-    text .= "GUI-режим, который добавим позже:`r`n"
-    text .= "Открыть окно → ввести HEX → Enter → результат попадёт в буфер обмена.`r`n"
+    text .= "Кнопка ниже открывает то же окно, но результат кладётся в буфер обмена.`r`n"
     text .= "`r`n"
-    text .= "Примеры:`r`n"
+    text .= "Поддерживаемые форматы:`r`n"
     text .= "2014 → —`r`n"
-    text .= "0060 2014 0060 → `—``r`n"
+    text .= "0060 2014 0060 → несколько кодов через пробел`r`n"
+    text .= "006020140060 → слитная строка блоками по 4 HEX-символа`r`n"
     text .= "0020 → пробел`r`n"
+    text .= "`r`n"
+    text .= "Позже сюда нормально ляжет предпросмотр, история и избранные символы.`r`n"
 
     return text
 }
@@ -493,6 +501,9 @@ SettingsGui_RunAction(actionName) {
 
         case "ChangeLanguage":
             SettingsGui_ShowLanguagePlaceholder()
+			
+        case "OpenUnicodeInputClipboard":
+            UnicodeInput("clipboard")
 
         case "OpenHotkeysFile":
             OpenHotkeysFile()
