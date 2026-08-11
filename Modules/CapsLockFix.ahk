@@ -18,6 +18,7 @@
 CapsLockFixSelectedHotkey() {
     global g_AppName
 
+    title := g_AppName " — CapsLock Fix"
     oldClipboard := ClipboardAll()
 
     A_Clipboard := ""
@@ -25,7 +26,7 @@ CapsLockFixSelectedHotkey() {
 
     if !ClipWait(1.0) {
         A_Clipboard := oldClipboard
-        Notify("Не удалось скопировать выделение", g_AppName " CapsLock Fix", "Icon!")
+        Notify("Не удалось получить выделенный текст", title, "Icon!")
         return
     }
 
@@ -33,7 +34,7 @@ CapsLockFixSelectedHotkey() {
 
     if (text = "") {
         A_Clipboard := oldClipboard
-        Notify("Буфер пустой", g_AppName " CapsLock Fix", "Icon!")
+        Notify("Выделенный текст пуст", title, "Icon!")
         return
     }
 
@@ -41,7 +42,7 @@ CapsLockFixSelectedHotkey() {
 
     if (result = text) {
         A_Clipboard := oldClipboard
-        Notify("Нечего исправлять", g_AppName " CapsLock Fix", "Iconi")
+        Notify("В выделенном тексте нечего исправлять", title, "Iconi")
         return
     }
 
@@ -53,7 +54,7 @@ CapsLockFixSelectedHotkey() {
 
         if !ClipWait(0.5) {
             A_Clipboard := oldClipboard
-            Notify("Буфер не успел обновиться. Исходный буфер обмена восстановлен", g_AppName " CapsLock Fix", "Icon!")
+            Notify("Не удалось подготовить исправленный текст. Буфер обмена восстановлен", title, "Icon!")
             return
         }
 
@@ -63,13 +64,13 @@ CapsLockFixSelectedHotkey() {
         Sleep 500
         A_Clipboard := oldClipboard
 
-        Notify("Регистр исправлен", g_AppName " CapsLock Fix", "Iconi", true)
+        Notify("Регистр исправлен", title, "Iconi", true)
     } catch as err {
         try {
             A_Clipboard := oldClipboard
         }
 
-        Notify("Ошибка вставки: " err.Message, g_AppName " CapsLock Fix", "Iconx")
+        Notify("Не удалось вставить исправленный текст: " err.Message, title, "Iconx")
     }
 }
 

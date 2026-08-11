@@ -12,7 +12,7 @@ Powered by **AutoHotkey v2**.
 
 - Fix selected text typed in the wrong RU/EN layout.
 - Majority mode for mixed RU/EN text.
-- Live mode: fix the current typed fragment with double space.
+- Live mode: fix the current typed fragment with double space or an alternative hotkey.
 - Unicode Input: insert Unicode characters by HEX code.
 - CapsLock Fix: repair accidental CapsLock case.
 - Settings GUI with hotkeys, exclusions and live-mode settings.
@@ -41,6 +41,7 @@ If AutoHotkey v2 is missing, the launcher will open the official AutoHotkey webs
 | Full layout conversion     | `Win + F12`         |
 | Majority layout conversion | `Win + F11`         |
 | Toggle live mode           | `Win + F10`         |
+| Convert current live text  | `Win + F9`          |
 | Unicode Input              | `Ctrl + Shift + U`  |
 | CapsLock Fix               | `Win + Shift + F12` |
 
@@ -50,7 +51,7 @@ Hotkeys can be changed in:
 Documents\Layout Toolkit\hotkeys.ini
 ```
 
-They can also be opened and reloaded from the Settings GUI.
+The built-in hotkeys can also be captured and changed directly in the Settings GUI.
 
 ---
 
@@ -58,7 +59,7 @@ They can also be opened and reloaded from the Settings GUI.
 
 ### Layout Fix
 
-Use this when selected text was typed in the wrong layout.
+Use this when selected text was typed in the wrong layout. Every RU letter is converted to the EN letter on the same key, and every EN letter is converted to RU. Punctuation is preserved. Words from the exclusions dictionary are not changed.
 
 ```text
 Ghbdtn/ Rfr ltkf&
@@ -86,7 +87,7 @@ becomes:
 
 ### Live mode
 
-Live mode fixes the current typed fragment after a double space.
+Live mode fixes the current typed fragment using one of two alternative triggers. Double space is selected by default and leaves one trailing space after conversion. The live hotkey (`Win + F9` by default) performs the same conversion without adding anything at the end.
 
 ```text
 Z gbie ntrcn/  
@@ -129,6 +130,8 @@ inserts:
 ```
 
 The Settings GUI can open Unicode Input in clipboard mode.
+
+History and favorites use `Ctrl + 1…5` and `Shift + 1…5` by default. Their prefix keys can be changed to `Ctrl`, `Shift`, `Alt`, `Win` or `Tab` in either Unicode Input or the Settings GUI. When `Tab` is selected, normal Tab navigation is disabled inside Unicode Input.
 
 ### CapsLock Fix
 
@@ -194,12 +197,14 @@ C:\
 
 The Settings GUI can:
 
-* show current hotkeys;
+* capture and change built-in hotkeys;
 * open and reload `hotkeys.ini`;
 * reset hotkeys to defaults;
 * open and reload `exclude.txt`;
 * reset exclusions to defaults;
+* choose between double-space and hotkey live triggers;
 * configure live mode;
+* configure synchronized Unicode Input history and favorites shortcuts;
 * open Unicode Input in clipboard mode.
 
 Open it from the tray menu or by double-clicking the Layout Toolkit tray icon.
