@@ -3,10 +3,10 @@ setlocal
 
 set "APP_NAME=Layout Toolkit RU-EN"
 set "SCRIPT=%~dp0Layout_Toolkit_RU_EN.ahk"
-set "ICON=%~dp0icon.ico"
+set "CORE=%~dp0Resolve_AutoHotkey.ps1"
+set "ICON=%~dp0Assets\icon.ico"
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "STARTUP_LINK=%STARTUP%\Layout Toolkit RU-EN.lnk"
-set "AHK="
 
 :MENU
 cls
@@ -48,45 +48,19 @@ if not exist "%SCRIPT%" (
     goto MENU
 )
 
-call :FIND_AHK
-
-if not defined AHK (
-    powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('AutoHotkey v2 is required, but it was not found. The official website will open now.', 'AutoHotkey v2 required', 'OK', 'Information')"
-    start "" "https://www.autohotkey.com/"
+if not exist "%CORE%" (
+    powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Resolve_AutoHotkey.ps1 was not found next to Startup_Manager.cmd.', 'Layout Toolkit', 'OK', 'Error')"
     pause
     goto MENU
 )
 
-if not exist "%STARTUP%" (
-    mkdir "%STARTUP%" 2>nul
-    if errorlevel 1 (
-        powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Failed to create startup folder. Check permissions.', 'Layout Toolkit', 'OK', 'Error')"
-        pause
-        goto MENU
-    )
-)
-
-set "BASE=%~dp0"
-set "PS1=%TEMP%\layout_toolkit_startup_%RANDOM%.ps1"
-
-> "%PS1%" echo $w = New-Object -ComObject WScript.Shell
->> "%PS1%" echo $lnk = $w.CreateShortcut($env:STARTUP_LINK)
->> "%PS1%" echo $lnk.TargetPath = $env:AHK
->> "%PS1%" echo $lnk.Arguments = '"' + $env:SCRIPT + '"'
->> "%PS1%" echo $lnk.WorkingDirectory = $env:BASE
->> "%PS1%" echo $lnk.Description = $env:APP_NAME
->> "%PS1%" echo if (Test-Path $env:ICON^) { $lnk.IconLocation = $env:ICON } else { $lnk.IconLocation = $env:AHK + ',0' }
->> "%PS1%" echo $lnk.Save()
-
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%CORE%" -Action InstallStartup -ScriptPath "%SCRIPT%" -IconPath "%ICON%" -StartupLink "%STARTUP_LINK%"
+if errorlevel 2 goto MENU
 if errorlevel 1 (
-    del "%PS1%" >nul 2>nul
     powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('PowerShell failed to create startup shortcut.', 'Layout Toolkit', 'OK', 'Error')"
     pause
     goto MENU
 )
-
-del "%PS1%" >nul 2>nul
 
 if exist "%STARTUP_LINK%" (
     powershell -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Startup shortcut has been installed.', 'Layout Toolkit', 'OK', 'Information')"
@@ -115,14 +89,3 @@ if exist "%STARTUP_LINK%" (
 
 pause
 goto MENU
-
-
-:FIND_AHK
-set "AHK="
-
-if exist "%ProgramFiles%\AutoHotkey\v2\AutoHotkey64.exe" set "AHK=%ProgramFiles%\AutoHotkey\v2\AutoHotkey64.exe"
-if not defined AHK if exist "%ProgramFiles%\AutoHotkey\v2\AutoHotkey.exe" set "AHK=%ProgramFiles%\AutoHotkey\v2\AutoHotkey.exe"
-if not defined AHK if exist "%LocalAppData%\Programs\AutoHotkey\v2\AutoHotkey64.exe" set "AHK=%LocalAppData%\Programs\AutoHotkey\v2\AutoHotkey64.exe"
-if not defined AHK if exist "%LocalAppData%\Programs\AutoHotkey\v2\AutoHotkey.exe" set "AHK=%LocalAppData%\Programs\AutoHotkey\v2\AutoHotkey.exe"
-
-exit /b

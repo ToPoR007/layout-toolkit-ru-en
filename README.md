@@ -22,15 +22,22 @@ Powered by **AutoHotkey v2**.
 
 ## Quick start / Быстрый запуск
 
-1. Install **AutoHotkey v2**.
-2. Download the project or release archive.
-3. Run:
+1. Download and extract the project or release archive.
+2. Run:
 
 ```text
 Run_Layout_Toolkit.cmd
-````
+```
 
-If AutoHotkey v2 is missing, the launcher will open the official AutoHotkey website.
+The launcher recognizes standard, custom and portable AutoHotkey v2 installations.
+
+If AutoHotkey v2 is not found, it explains why AHK is required and lets you either:
+
+* download the latest stable version from the official website and install it for the current user;
+* select an existing `AutoHotkey.exe` manually;
+* cancel the launch.
+
+The selected executable is remembered in `%LocalAppData%\Layout Toolkit\autohotkey-path.txt`.
 
 ---
 
@@ -220,6 +227,8 @@ Startup_Manager.cmd
 ```
 
 It can add or remove Layout Toolkit from Windows startup.
+
+The startup shortcut uses the same AutoHotkey resolver as the normal launcher, including custom and portable installations.
 
 ---
 
