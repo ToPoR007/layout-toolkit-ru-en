@@ -66,7 +66,7 @@ The built-in hotkeys can also be captured and changed directly in the Settings G
 
 ### Layout Fix
 
-Use this when selected text was typed in the wrong layout. Every RU letter is converted to the EN letter on the same key, and every EN letter is converted to RU. Punctuation is preserved. Words from the exclusions dictionary are not changed.
+Use this when selected text was typed in the wrong layout. The conversion direction is detected separately for each whitespace-delimited token, so RU and EN fragments can be fixed in one pass. A trailing `.`, `,` or `?` is preserved as punctuation; `[]{}<>` are always converted to the corresponding RU-layout letters, while internal `/` and `.` are converted as the symmetric pair `/ ↔ .`. Words from the exclusions dictionary are not changed.
 
 ```text
 Ghbdtn/ Rfr ltkf&

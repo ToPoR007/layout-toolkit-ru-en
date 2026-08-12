@@ -967,7 +967,7 @@ ShowTrainingGui(isFirstRun := false) {
     body := ""
     body .= "1. Исправление раскладки`r`n"
     body .= "Сначала выделите текст.`r`n"
-    body .= "Полное исправление: " HotkeyToDisplay(g_HotkeyLayoutFull) " — меняет каждую RU/EN-букву на букву с той же клавиши в другой раскладке.`r`n"
+    body .= "Полное исправление: " HotkeyToDisplay(g_HotkeyLayoutFull) " — определяет направление отдельно для каждого слова и меняет символы по раскладке.`r`n"
     body .= "Слова из словаря исключений остаются без изменений.`r`n"
     body .= "По большинству: " HotkeyToDisplay(g_HotkeyLayoutMajority) " — подходит для смешанного текста.`r`n"
     body .= "`r`n"
@@ -1125,7 +1125,7 @@ ToggleLiveMode(*) {
 
 
 ; ============================================================
-; Win + F12: посимвольная RU ↔ EN-конвертация всего выделения
+; Win + F12: токенная RU ↔ EN-конвертация всего выделения
 ; ============================================================
 
 ConvertSelectedFullHotkey() {
@@ -1187,8 +1187,6 @@ ConvertSelectedFullHotkey() {
 
 
 ConvertFullText(text) {
-    enToRu := GetConversionTable("EN_TO_RU")
-    ruToEn := GetConversionTable("RU_TO_EN")
     out := ""
 
     for part in SplitByWhitespace(text) {
@@ -1197,19 +1195,107 @@ ConvertFullText(text) {
             continue
         }
 
-        for ch in StrSplit(part) {
-            if IsLatin(ch) {
-                out .= enToRu.Has(ch) ? enToRu[ch] : ch
-            } else if IsCyrillic(ch) {
-                out .= ruToEn.Has(ch) ? ruToEn[ch] : ch
-            } else {
-                ; Цифры, пробелы и пунктуацию Full не анализирует и не меняет.
-                out .= ch
-            }
+        out .= ConvertFullToken(part)
+    }
+
+    return out
+}
+
+
+ConvertFullToken(token) {
+    latin := 0
+    cyrillic := 0
+
+    for ch in StrSplit(token) {
+        if IsLatin(ch) {
+            latin++
+        } else if IsCyrillic(ch) {
+            cyrillic++
+        }
+    }
+
+    if (latin > 0 && cyrillic = 0) {
+        return ConvertFullTokenByDirection(token, "EN_TO_RU")
+    }
+
+    if (cyrillic > 0 && latin = 0) {
+        return ConvertFullTokenByDirection(token, "RU_TO_EN")
+    }
+
+    ; Для токена без букв или со смешанными алфавитами сохраняем прежнюю
+    ; побуквенную логику. Неоднозначные знаки в нём не конвертируем.
+    enToRu := GetConversionTable("EN_TO_RU")
+    ruToEn := GetConversionTable("RU_TO_EN")
+    out := ""
+    tokenLength := StrLen(token)
+
+    for index, ch in StrSplit(token) {
+        if IsLatin(ch) {
+            out .= enToRu.Has(ch) ? enToRu[ch] : ch
+        } else if IsCyrillic(ch) {
+            out .= ruToEn.Has(ch) ? ruToEn[ch] : ch
+        } else if IsLayoutBracket(ch) {
+            ; У скобочных клавиш направление однозначно задаётся самим
+            ; символом, поэтому конвертируем их даже в смешанном токене.
+            out .= enToRu[ch]
+        } else if (ch = "/") {
+            out .= "."
+        } else if (ch = "." && index < tokenLength) {
+            out .= "/"
+        } else {
+            out .= ch
         }
     }
 
     return out
+}
+
+
+ConvertFullTokenByDirection(token, direction) {
+    table := GetConversionTable(direction)
+    enToRu := GetConversionTable("EN_TO_RU")
+    out := ""
+    tokenLength := StrLen(token)
+
+    for index, ch in StrSplit(token) {
+        ; Скобочные клавиши EN всегда конвертируем в RU независимо от
+        ; направления и положения внутри токена.
+        if IsLayoutBracket(ch) {
+            out .= enToRu[ch]
+            continue
+        }
+
+        ; Точка, запятая и вопросительный знак в самом конце токена считаются
+        ; настоящей пунктуацией. Сохраняем весь такой конечный хвост (например,
+        ; многоточие), а в начале и внутри токена эти знаки конвертируются.
+        if ((ch = "." || ch = "," || ch = "?")
+         && SubStr(token, index) ~= "^[.,?]+$") {
+            out .= ch
+            continue
+        }
+
+        ; Вне конечного пунктуационного хвоста слеш и точка образуют явную
+        ; симметричную пару независимо от направления токена.
+        if (ch = "/") {
+            out .= "."
+            continue
+        }
+
+        if (ch = ".") {
+            out .= "/"
+            continue
+        }
+
+        out .= table.Has(ch) ? table[ch] : ch
+    }
+
+    return out
+}
+
+
+IsLayoutBracket(ch) {
+    return ch = "[" || ch = "]" || ch = "{" || ch = "}"
+        || ch = "<" || ch = ">"
 }
 
 
