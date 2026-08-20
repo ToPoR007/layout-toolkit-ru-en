@@ -143,7 +143,8 @@ OpenSettingsGui(*) {
         ["LiveToggle", "Включить или выключить Live"],
         ["LiveConvert", "Исправить текущий Live-фрагмент"],
         ["UnicodeInput", "Unicode Input"],
-        ["CapsLockFix", "CapsLock Fix"]
+        ["CapsLockFix", "CapsLock Fix (умный)"],
+        ["CapsLockFullFix", "CapsLock Full Fix"]
     ]
     hotkeyY := 108
 
@@ -160,7 +161,7 @@ OpenSettingsGui(*) {
         hotkeyY += 38
     }
 
-    g_SettingsHotkeySaveBtn := g_SettingsGui.AddButton("x180 y340 w165 h30 Hidden", "Сохранить сочетания")
+    g_SettingsHotkeySaveBtn := g_SettingsGui.AddButton("x180 y376 w165 h30 Hidden", "Сохранить сочетания")
     g_SettingsHotkeySaveBtn.OnEvent("Click", SettingsGui_SaveCapturedHotkeys)
 
     g_SettingsActionBtn1 := g_SettingsGui.AddButton("x180 y420 w165 h30 Hidden", "")
@@ -319,7 +320,7 @@ SettingsGui_GetLayoutFixText() {
 
     text .= "Полное исправление`r`n"
     text .= "Определяет направление отдельно для каждого слова и меняет символы на соответствующие клавиши другой раскладки.`r`n"
-    text .= "Точка, запятая и вопросительный знак в конце слова сохраняются. []{}<> всегда меняются на буквы русской раскладки, а внутренние / и . меняются друг на друга. Словарь исключений продолжает действовать.`r`n"
+    text .= "В однозначно русском или английском слове все символы, включая пунктуацию, меняются строго по физическим клавишам. Словарь исключений продолжает действовать.`r`n"
     text .= "Горячая клавиша: " HotkeyToDisplay(g_HotkeyLayoutFull) "`r`n"
     text .= "`r`n"
 
@@ -633,6 +634,7 @@ SettingsGui_SaveUnicodeSettings() {
 SettingsGui_GetCurrentHotkeyValues() {
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
     global g_HotkeyLiveConvert, g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+    global g_HotkeyCapsLockFullFix
 
     return Map(
         "LayoutFull", g_HotkeyLayoutFull,
@@ -640,7 +642,8 @@ SettingsGui_GetCurrentHotkeyValues() {
         "LiveToggle", g_HotkeyLiveToggle,
         "LiveConvert", g_HotkeyLiveConvert,
         "UnicodeInput", g_HotkeyUnicodeInput,
-        "CapsLockFix", g_HotkeyCapsLockFix
+        "CapsLockFix", g_HotkeyCapsLockFix,
+        "CapsLockFullFix", g_HotkeyCapsLockFullFix
     )
 }
 
@@ -652,7 +655,8 @@ SettingsGui_GetHotkeyLabel(actionName) {
         "LiveToggle", "Включить или выключить Live",
         "LiveConvert", "Исправить текущий Live-фрагмент",
         "UnicodeInput", "Unicode Input",
-        "CapsLockFix", "CapsLock Fix"
+        "CapsLockFix", "CapsLock Fix (умный)",
+        "CapsLockFullFix", "CapsLock Full Fix"
     )
 
     return labels.Has(actionName) ? labels[actionName] : actionName
@@ -956,20 +960,20 @@ SettingsGui_GetUnicodeText() {
 
 
 SettingsGui_GetCapsLockText() {
-    global g_HotkeyCapsLockFix
+    global g_HotkeyCapsLockFix, g_HotkeyCapsLockFullFix
 
     text := ""
-    text .= "CapsLock Fix:`r`n"
+    text .= "CapsLock Full Fix:`r`n"
+    text .= "Хоткей: " HotkeyToDisplay(g_HotkeyCapsLockFullFix) "`r`n"
+    text .= "Инвертирует регистр каждой русской и английской буквы без анализа текста.`r`n"
+    text .= "Пример: мАМА ПОШЛА В МАГАЗИН → Мама пошла в магазин.`r`n"
     text .= "`r`n"
+    text .= "CapsLock Fix (умный):`r`n"
     text .= "Хоткей: " HotkeyToDisplay(g_HotkeyCapsLockFix) "`r`n"
-    text .= "Выделите текст и нажмите горячую клавишу, чтобы исправить случайно включённый CapsLock.`r`n"
+    text .= "Анализирует ошибочный регистр и приводит текст к обычному написанию.`r`n"
+    text .= "Пример: эТО пРИМЕР → Это пример.`r`n"
     text .= "`r`n"
-    text .= "Примеры:`r`n"
-    text .= "пРИВЕТ → Привет`r`n"
-    text .= "эТО пРИМЕР → Это пример`r`n"
-    text .= "тАК. пРИМЕР → Так. Пример`r`n"
-    text .= "`r`n"
-    text .= "Слова из словаря исключений сохраняют указанное написание, например GitHub и PowerShell.`r`n"
+    text .= "В обоих режимах слова из словаря исключений сохраняют указанное написание, например GitHub и PowerShell.`r`n"
 
     return text
 }
@@ -980,7 +984,7 @@ SettingsGui_GetExclusionsText() {
 
     text := ""
     text .= "Словарь исключений защищает технические слова, команды, пути и ссылки от нежелательного исправления.`r`n"
-    text .= "Он также помогает CapsLock Fix восстановить точное написание слов, например PowerShell.`r`n"
+    text .= "Он также помогает обоим режимам CapsLock восстановить точное написание слов, например PowerShell.`r`n"
     text .= "`r`n"
     text .= "Ваш словарь:`r`n"
     text .= g_ExcludePath "`r`n"

@@ -65,6 +65,7 @@ global g_HotkeyLiveToggle := ""
 global g_HotkeyLiveConvert := ""
 global g_HotkeyUnicodeInput := ""
 global g_HotkeyCapsLockFix := ""
+global g_HotkeyCapsLockFullFix := ""
 
 global g_RegisteredHotkeys := []
 global g_RegisteredLiveConvertHotkey := ""
@@ -100,6 +101,9 @@ global g_LastSpaceTick := 0
 global g_MaxBufferChars := 300
 global g_PendingBoundary := false
 global g_AfterBoundarySpace := false
+global g_BoundaryStart := 0
+global g_LiveBoundarySourcePrefix := ""
+global g_LiveBoundaryReplacementPrefix := ""
 global g_LastWindow := WinExist("A")
 
 EnsureUserDataDir() {
@@ -267,17 +271,35 @@ LoadHotkeys(*) {
     global g_HotkeysPath, g_DefaultHotkeysPath, g_Hotkeys
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
     global g_HotkeyLiveConvert, g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+    global g_HotkeyCapsLockFullFix
 
     EnsureHotkeysFile()
 
     ; Assets\hotkeys.default.ini — единственный источник заводских значений.
     ; Пользовательский hotkeys.ini накладывается поверх него и может добавлять
     ; собственные ключи для дополнительных модулей.
-    mergedHotkeys := ParseHotkeysFile(g_DefaultHotkeysPath)
+    defaultHotkeys := ParseHotkeysFile(g_DefaultHotkeysPath)
+    mergedHotkeys := Map()
     userHotkeys := ParseHotkeysFile(g_HotkeysPath)
+
+    for key, value in defaultHotkeys {
+        mergedHotkeys[key] := value
+    }
+
+    ; До появления полного режима заводской CapsLock Fix использовал F12.
+    ; Если пользовательский файл всё ещё содержит именно эту старую схему,
+    ; берём новое заводское значение F11 для умного режима. Пользовательские
+    ; сочетания с другими значениями остаются без изменений.
+    legacyCapsLockDefaults := !userHotkeys.Has("CapsLockFullFix")
+        && userHotkeys.Has("CapsLockFix")
+        && StrLower(Trim(userHotkeys["CapsLockFix"])) = "#+f12"
 
     for key, value in userHotkeys {
         mergedHotkeys[key] := value
+    }
+
+    if (legacyCapsLockDefaults && defaultHotkeys.Has("CapsLockFix")) {
+        mergedHotkeys["CapsLockFix"] := defaultHotkeys["CapsLockFix"]
     }
 
     g_Hotkeys := mergedHotkeys
@@ -289,6 +311,7 @@ LoadHotkeys(*) {
     g_HotkeyLiveConvert := GetHotkey("LiveConvert")
     g_HotkeyUnicodeInput := GetHotkey("UnicodeInput")
     g_HotkeyCapsLockFix := GetHotkey("CapsLockFix")
+    g_HotkeyCapsLockFullFix := GetHotkey("CapsLockFullFix")
 }
 
 GetHotkey(actionName, defaultValue := "") {
@@ -513,7 +536,7 @@ $*Space::LiveSpacePressed()
 
 RegisterHotkeys() {
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
-    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix, g_HotkeyCapsLockFullFix
     global g_RegisteredHotkeys
 
     DisableRegisteredLiveConvertHotkey()
@@ -543,6 +566,9 @@ RegisterHotkeys() {
         success := false
     }
     if !RegisterOneHotkey(g_HotkeyCapsLockFix, (*) => CapsLockFixSelectedHotkey(), "CapsLock Fix") {
+        success := false
+    }
+    if !RegisterOneHotkey(g_HotkeyCapsLockFullFix, (*) => CapsLockFullFixSelectedHotkey(), "CapsLock Full Fix") {
         success := false
     }
     if !UpdateLiveConvertHotkeyRegistration() {
@@ -591,7 +617,7 @@ UpdateLiveConvertHotkeyRegistration() {
     global g_LiveEnabled, g_LiveTriggerMode
     global g_HotkeyLiveConvert, g_RegisteredLiveConvertHotkey
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
-    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix, g_AppName
+    global g_HotkeyUnicodeInput, g_HotkeyCapsLockFix, g_HotkeyCapsLockFullFix, g_AppName
 
     DisableRegisteredLiveConvertHotkey()
 
@@ -605,7 +631,8 @@ UpdateLiveConvertHotkeyRegistration() {
         g_HotkeyLayoutMajority,
         g_HotkeyLiveToggle,
         g_HotkeyUnicodeInput,
-        g_HotkeyCapsLockFix
+        g_HotkeyCapsLockFix,
+        g_HotkeyCapsLockFullFix
     ]
 
     for _, hotkeyName in occupied {
@@ -954,6 +981,7 @@ ShowTrainingGui(isFirstRun := false) {
     global g_LiveEnabled, g_AppName
     global g_HotkeyLayoutFull, g_HotkeyLayoutMajority, g_HotkeyLiveToggle
     global g_HotkeyLiveConvert, g_HotkeyUnicodeInput, g_HotkeyCapsLockFix
+    global g_HotkeyCapsLockFullFix
 
     guiObj := Gui("+AlwaysOnTop", g_AppName " — краткая справка")
     guiObj.SetFont("s10", "Segoe UI")
@@ -986,9 +1014,9 @@ ShowTrainingGui(isFirstRun := false) {
     body .= "Из настроек Unicode Input можно открыть в режиме копирования.`r`n"
     body .= "`r`n"
 
-    body .= "4. CapsLock Fix`r`n"
-    body .= "Хоткей: " HotkeyToDisplay(g_HotkeyCapsLockFix) ".`r`n"
-    body .= "Исправляет регистр выделенного текста: пРИВЕТ → Привет.`r`n"
+    body .= "4. Исправление CapsLock`r`n"
+    body .= "Полный режим: " HotkeyToDisplay(g_HotkeyCapsLockFullFix) " — инвертирует регистр каждой буквы.`r`n"
+    body .= "Умный режим: " HotkeyToDisplay(g_HotkeyCapsLockFix) " — приводит ошибочный регистр к обычному написанию.`r`n"
     body .= "Словарь исключений сохраняет точное написание слов, например PowerShell и GitHub.`r`n"
     body .= "`r`n"
 
@@ -1227,21 +1255,12 @@ ConvertFullToken(token) {
     enToRu := GetConversionTable("EN_TO_RU")
     ruToEn := GetConversionTable("RU_TO_EN")
     out := ""
-    tokenLength := StrLen(token)
 
-    for index, ch in StrSplit(token) {
+    for ch in StrSplit(token) {
         if IsLatin(ch) {
             out .= enToRu.Has(ch) ? enToRu[ch] : ch
         } else if IsCyrillic(ch) {
             out .= ruToEn.Has(ch) ? ruToEn[ch] : ch
-        } else if IsLayoutBracket(ch) {
-            ; У скобочных клавиш направление однозначно задаётся самим
-            ; символом, поэтому конвертируем их даже в смешанном токене.
-            out .= enToRu[ch]
-        } else if (ch = "/") {
-            out .= "."
-        } else if (ch = "." && index < tokenLength) {
-            out .= "/"
         } else {
             out .= ch
         }
@@ -1253,49 +1272,13 @@ ConvertFullToken(token) {
 
 ConvertFullTokenByDirection(token, direction) {
     table := GetConversionTable(direction)
-    enToRu := GetConversionTable("EN_TO_RU")
     out := ""
-    tokenLength := StrLen(token)
 
-    for index, ch in StrSplit(token) {
-        ; Скобочные клавиши EN всегда конвертируем в RU независимо от
-        ; направления и положения внутри токена.
-        if IsLayoutBracket(ch) {
-            out .= enToRu[ch]
-            continue
-        }
-
-        ; Точка, запятая и вопросительный знак в самом конце токена считаются
-        ; настоящей пунктуацией. Сохраняем весь такой конечный хвост (например,
-        ; многоточие), а в начале и внутри токена эти знаки конвертируются.
-        if ((ch = "." || ch = "," || ch = "?")
-         && SubStr(token, index) ~= "^[.,?]+$") {
-            out .= ch
-            continue
-        }
-
-        ; Вне конечного пунктуационного хвоста слеш и точка образуют явную
-        ; симметричную пару независимо от направления токена.
-        if (ch = "/") {
-            out .= "."
-            continue
-        }
-
-        if (ch = ".") {
-            out .= "/"
-            continue
-        }
-
+    for ch in StrSplit(token) {
         out .= table.Has(ch) ? table[ch] : ch
     }
 
     return out
-}
-
-
-IsLayoutBracket(ch) {
-    return ch = "[" || ch = "]" || ch = "{" || ch = "}"
-        || ch = "<" || ch = ">"
 }
 
 
@@ -1678,20 +1661,17 @@ LiveSpacePressed() {
 
 AppendLiveSpaceToBuffer(armDoubleSpace := true) {
     global g_Buffer, g_LastSpaceTick, g_MaxBufferChars
-    global g_PendingBoundary, g_AfterBoundarySpace
 
     g_Buffer .= " "
 
     if (StrLen(g_Buffer) > g_MaxBufferChars) {
         g_Buffer := SubStr(g_Buffer, StrLen(g_Buffer) - g_MaxBufferChars + 1)
-        RecalculateBufferState()
+        ClearLiveBoundaryPrefix()
     }
+
+    RecalculateBufferState()
 
     g_LastSpaceTick := armDoubleSpace ? A_TickCount : 0
-
-    if (g_PendingBoundary) {
-        g_AfterBoundarySpace := true
-    }
 }
 
 
@@ -1702,9 +1682,8 @@ SendPlainSpace() {
 
 IH_OnChar(ih, char) {
     global g_LiveEnabled, g_LiveTriggerMode, g_LiveBusy
-    global g_Buffer, g_Direction
+    global g_Buffer
     global g_LastSpaceTick, g_MaxBufferChars
-    global g_PendingBoundary, g_AfterBoundarySpace
     global g_LastWindow
     global g_HotkeyCaptureActive
 
@@ -1753,33 +1732,17 @@ IH_OnChar(ih, char) {
         ResetTypingBuffer()
     }
 
-    ; Если после границы и пробела начался новый текст — начинаем новый фрагмент.
-    if (g_PendingBoundary && g_AfterBoundarySpace && !IsWhitespaceChar(char)) {
-        ResetTypingBuffer(false)
-    }
-
     g_Buffer .= char
 
     if (StrLen(g_Buffer) > g_MaxBufferChars) {
         g_Buffer := SubStr(g_Buffer, StrLen(g_Buffer) - g_MaxBufferChars + 1)
-        RecalculateBufferState()
+        ClearLiveBoundaryPrefix()
     }
 
-    ; Определяем направление по первой букве фрагмента.
-    if (g_Direction = "") {
-        d := DirectionFromChar(char)
-        if (d != "") {
-            g_Direction := d
-        }
-    }
-
-    ; Адаптивные границы фрагмента.
-    if (g_Direction != "" && IsBoundaryChar(char, g_Direction)) {
-        g_PendingBoundary := true
-        g_AfterBoundarySpace := false
-    } else if (g_PendingBoundary && IsWhitespaceChar(char)) {
-        g_AfterBoundarySpace := true
-    }
+    ; Пересчёт подтверждает границу только после пробела. Когда затем начинается
+    ; новое предложение, старый текст отбрасывается, но сам знак с пробелами
+    ; переносится в начало нового заменяемого фрагмента.
+    RecalculateBufferState()
 }
 
 IsLiveSpaceArmBreakerKey(keyName) {
@@ -1941,6 +1904,7 @@ TryLiveConvertHotkey(rawFragment, targetWindow) {
 DoLiveConvertAndReplace(rawFragment, title, targetWindow, replacementSuffix := " ") {
     global g_LiveBusy, g_LivePendingBuffer
     global g_LiveContextInvalidated, g_LiveOperationWindow
+    global g_LiveBoundarySourcePrefix, g_LiveBoundaryReplacementPrefix
 
     fragment := RTrim(rawFragment, " `t`r`n")
 
@@ -1950,7 +1914,17 @@ DoLiveConvertAndReplace(rawFragment, title, targetWindow, replacementSuffix := "
         return false
     }
 
-    direction := DetectDirectionFromText(fragment)
+    boundaryPrefixLength := 0
+    boundaryReplacement := ""
+
+    if (g_LiveBoundarySourcePrefix != ""
+     && SubStr(fragment, 1, StrLen(g_LiveBoundarySourcePrefix)) = g_LiveBoundarySourcePrefix) {
+        boundaryPrefixLength := StrLen(g_LiveBoundarySourcePrefix)
+        boundaryReplacement := g_LiveBoundaryReplacementPrefix
+    }
+
+    conversionBody := SubStr(fragment, boundaryPrefixLength + 1)
+    direction := DetectDirectionFromText(conversionBody)
 
     if (direction = "") {
         Notify("Не удалось определить раскладку", title, "Icon!")
@@ -1958,7 +1932,7 @@ DoLiveConvertAndReplace(rawFragment, title, targetWindow, replacementSuffix := "
         return false
     }
 
-    converted := ConvertTextByDirection(fragment, direction)
+    converted := boundaryReplacement . ConvertTextByDirection(conversionBody, direction)
 
     if (converted = fragment) {
         Notify("В текущем фрагменте нечего исправлять", title, "Iconi")
@@ -2077,7 +2051,8 @@ FinishLiveOperation(replacementApplied, targetWindow) {
 ResetTypingBuffer(resetWindow := true) {
     global g_Buffer, g_Direction
     global g_LastSpaceTick
-    global g_PendingBoundary, g_AfterBoundarySpace
+    global g_PendingBoundary, g_AfterBoundarySpace, g_BoundaryStart
+    global g_LiveBoundarySourcePrefix, g_LiveBoundaryReplacementPrefix
     global g_LastWindow
 
     g_Buffer := ""
@@ -2085,6 +2060,9 @@ ResetTypingBuffer(resetWindow := true) {
     g_LastSpaceTick := 0
     g_PendingBoundary := false
     g_AfterBoundarySpace := false
+    g_BoundaryStart := 0
+    g_LiveBoundarySourcePrefix := ""
+    g_LiveBoundaryReplacementPrefix := ""
 
     if (resetWindow) {
         g_LastWindow := WinExist("A")
@@ -2094,31 +2072,96 @@ ResetTypingBuffer(resetWindow := true) {
 
 RecalculateBufferState() {
     global g_Buffer, g_Direction
-    global g_PendingBoundary, g_AfterBoundarySpace
+    global g_PendingBoundary, g_AfterBoundarySpace, g_BoundaryStart
+    global g_LiveBoundarySourcePrefix, g_LiveBoundaryReplacementPrefix
 
-    g_Direction := DetectDirectionFromText(g_Buffer)
-    g_PendingBoundary := false
-    g_AfterBoundarySpace := false
+    prefixLength := StrLen(g_LiveBoundarySourcePrefix)
 
-    if (g_Direction = "") {
-        return
+    if (prefixLength > 0
+     && (StrLen(g_Buffer) < prefixLength
+      || SubStr(g_Buffer, 1, prefixLength) != g_LiveBoundarySourcePrefix)) {
+        ClearLiveBoundaryPrefix()
+        prefixLength := 0
     }
 
-    chars := StrSplit(g_Buffer)
+    body := SubStr(g_Buffer, prefixLength + 1)
+    g_Direction := ""
+    g_PendingBoundary := false
+    g_AfterBoundarySpace := false
+    g_BoundaryStart := 0
+
+    chars := StrSplit(body)
 
     Loop chars.Length {
         ch := chars[A_Index]
 
-        if (IsBoundaryChar(ch, g_Direction)) {
+        if IsWhitespaceChar(ch) {
+            if g_PendingBoundary {
+                g_AfterBoundarySpace := true
+            }
+            continue
+        }
+
+        if (g_PendingBoundary && g_AfterBoundarySpace) {
+            absoluteBoundaryStart := prefixLength + g_BoundaryStart
+            sourcePrefix := SubStr(g_Buffer, absoluteBoundaryStart, prefixLength + A_Index - absoluteBoundaryStart)
+
+            g_Buffer := sourcePrefix . SubStr(body, A_Index)
+            g_LiveBoundarySourcePrefix := sourcePrefix
+            g_LiveBoundaryReplacementPrefix := NormalizeLiveBoundaryPrefix(sourcePrefix)
+            return RecalculateBufferState()
+        }
+
+        if (g_PendingBoundary && !g_AfterBoundarySpace) {
+            ; Последовательности вроде "?!" считаем одной границей. Если же
+            ; сразу продолжилось слово (например, пиво/водка), кандидат отменяем.
+            if !IsBoundaryChar(ch, g_Direction) {
+                g_PendingBoundary := false
+                g_BoundaryStart := 0
+            }
+        }
+
+        if (g_Direction = "") {
+            d := DirectionFromChar(ch)
+            if (d != "") {
+                g_Direction := d
+            }
+        }
+
+        if (g_Direction != "" && IsBoundaryChar(ch, g_Direction)) {
+            if !g_PendingBoundary {
+                g_BoundaryStart := A_Index
+            }
             g_PendingBoundary := true
-            g_AfterBoundarySpace := false
-        } else if (g_PendingBoundary && IsWhitespaceChar(ch)) {
-            g_AfterBoundarySpace := true
-        } else if (g_PendingBoundary && g_AfterBoundarySpace && !IsWhitespaceChar(ch)) {
-            g_PendingBoundary := false
             g_AfterBoundarySpace := false
         }
     }
+}
+
+
+ClearLiveBoundaryPrefix() {
+    global g_LiveBoundarySourcePrefix, g_LiveBoundaryReplacementPrefix
+
+    g_LiveBoundarySourcePrefix := ""
+    g_LiveBoundaryReplacementPrefix := ""
+}
+
+
+NormalizeLiveBoundaryPrefix(prefix) {
+    out := ""
+
+    for ch in StrSplit(prefix) {
+        switch ch {
+            case "/", "ю", "Ю":
+                out .= "."
+            case "&", ",":
+                out .= "?"
+            default:
+                out .= ch
+        }
+    }
+
+    return out
 }
 
 

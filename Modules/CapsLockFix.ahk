@@ -1,5 +1,5 @@
 ; CapsLockFix.ahk
-; Исправление регистра выделенного текста.
+; Исправление регистра выделенного текста в умном и полном режимах.
 ;
 ; Зависит от функций основного LT:
 ; - SplitByWhitespace(text)
@@ -11,14 +11,26 @@
 ;   пРИВЕТ -> Привет
 ;   эТО пРИМЕР -> Это пример
 ;   тАК. пРИМЕР -> Так. Пример
+;   мАМА ПОШЛА В МАГАЗИН -> Мама пошла в магазин (полный режим)
 ;   GitHUB -> GitHub
 ;   POWERSHELL -> PowerShell
 
 
 CapsLockFixSelectedHotkey() {
+    CapsFix_ReplaceSelectedText("Smart")
+}
+
+
+CapsLockFullFixSelectedHotkey() {
+    CapsFix_ReplaceSelectedText("Full")
+}
+
+
+CapsFix_ReplaceSelectedText(mode) {
     global g_AppName
 
-    title := g_AppName " — CapsLock Fix"
+    isFullMode := mode = "Full"
+    title := g_AppName (isFullMode ? " — CapsLock Full Fix" : " — CapsLock Fix")
     oldClipboard := ClipboardAll()
 
     A_Clipboard := ""
@@ -38,7 +50,7 @@ CapsLockFixSelectedHotkey() {
         return
     }
 
-    result := FixCapsLockText(text)
+    result := isFullMode ? FixCapsLockFullText(text) : FixCapsLockText(text)
 
     if (result = text) {
         A_Clipboard := oldClipboard
@@ -325,4 +337,47 @@ CapsFix_IsLowerLetter(ch) {
     return (code >= 0x61 && code <= 0x7A)      ; a-z
         || (code >= 0x430 && code <= 0x44F)    ; а-я
         || (code = 0x451)                      ; ё
+}
+
+
+FixCapsLockFullText(text) {
+    out := ""
+
+    for part in SplitByWhitespace(text) {
+        if part ~= "^\s+$" {
+            out .= part
+            continue
+        }
+
+        ; Словарь исключений имеет приоритет над инверсией регистра и
+        ; восстанавливает точное написание, например GitHub или PowerShell.
+        if IsExcludedToken(part) {
+            canonical := GetCanonicalExcludedToken(part)
+            out .= canonical != "" ? canonical : part
+            continue
+        }
+
+        out .= CapsFix_InvertText(part)
+    }
+
+    return out
+}
+
+
+CapsFix_InvertText(text) {
+    result := ""
+
+    Loop Parse text {
+        ch := A_LoopField
+
+        if CapsFix_IsUpperLetter(ch) {
+            result .= CapsFix_ToLowerChar(ch)
+        } else if CapsFix_IsLowerLetter(ch) {
+            result .= CapsFix_ToUpperChar(ch)
+        } else {
+            result .= ch
+        }
+    }
+
+    return result
 }

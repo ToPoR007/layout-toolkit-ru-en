@@ -14,7 +14,8 @@ Powered by **AutoHotkey v2**.
 - Majority mode for mixed RU/EN text.
 - Live mode: fix the current typed fragment with double space or an alternative hotkey.
 - Unicode Input: insert Unicode characters by HEX code.
-- CapsLock Fix: repair accidental CapsLock case.
+- CapsLock Full Fix: invert the case of every RU/EN letter.
+- CapsLock Fix: normalize accidental CapsLock case with smart analysis.
 - Settings GUI with hotkeys, exclusions and live-mode settings.
 - User files stored in `Documents\Layout Toolkit`.
 
@@ -50,7 +51,8 @@ The selected executable is remembered in `%LocalAppData%\Layout Toolkit\autohotk
 | Toggle live mode           | `Win + F10`         |
 | Convert current live text  | `Win + F9`          |
 | Unicode Input              | `Ctrl + Shift + U`  |
-| CapsLock Fix               | `Win + Shift + F12` |
+| Smart CapsLock Fix         | `Win + Shift + F11` |
+| CapsLock Full Fix          | `Win + Shift + F12` |
 
 Hotkeys can be changed in:
 
@@ -66,7 +68,7 @@ The built-in hotkeys can also be captured and changed directly in the Settings G
 
 ### Layout Fix
 
-Use this when selected text was typed in the wrong layout. The conversion direction is detected separately for each whitespace-delimited token, so RU and EN fragments can be fixed in one pass. A trailing `.`, `,` or `?` is preserved as punctuation; `[]{}<>` are always converted to the corresponding RU-layout letters, while internal `/` and `.` are converted as the symmetric pair `/ ↔ .`. Words from the exclusions dictionary are not changed.
+Use this when selected text was typed in the wrong layout. The conversion direction is detected separately for each whitespace-delimited token, so RU and EN fragments can be fixed in one pass. Every character of an unambiguous RU or EN token is converted by its physical keyboard key, including punctuation. Words from the exclusions dictionary are not changed.
 
 ```text
 Ghbdtn/ Rfr ltkf&
@@ -142,17 +144,19 @@ History and favorites use `Ctrl + 1…5` and `Shift + 1…5` by default. Their p
 
 ### CapsLock Fix
 
-Fix selected text typed with accidental CapsLock:
+CapsLock Full Fix inverts every Russian and English letter without guessing:
 
 ```text
-пРИВЕТ
+мАМА ПОШЛА В МАГАЗИН
 ```
 
 becomes:
 
 ```text
-Привет
+Мама пошла в магазин
 ```
+
+The smart CapsLock Fix remains available for normalizing text such as `эТО пРИМЕР` to `Это пример`.
 
 ```text
 pOWERSHELL
@@ -164,7 +168,7 @@ can become:
 PowerShell
 ```
 
-if `PowerShell` is listed in `exclude.txt`.
+if `PowerShell` is listed in `exclude.txt`. Canonical spelling from the exclusions dictionary has priority in both modes.
 
 ---
 
